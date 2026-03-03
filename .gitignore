@@ -1,3 +1,7 @@
+# project-specific gitignore file for Python projects
+uv.lock
+test_notebook.ipynb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

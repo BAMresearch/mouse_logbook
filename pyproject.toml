@@ -1,0 +1,43 @@
+[project]
+name = "mouse-logbook"
+version = "0.1.0"
+description = "Read and enrich MOUSE logbook entries from Excel."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "attrs>=23.2.0",
+  "pandas>=2.1",
+  "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6.0",
+  "mypy>=1.8",
+  "types-openpyxl",
+  "pandas-stubs",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]  # we enforce via line-length, keep E501 ignored for compatibility
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+no_implicit_optional = true
+
+
+[project.scripts]
+mouse-logbook = "mouse_logbook.cli:main"
