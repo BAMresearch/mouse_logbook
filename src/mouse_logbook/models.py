@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import attrs
 import pandas as pd
@@ -68,13 +69,13 @@ class LogbookEntry:
     sample_thickness: float = attrs.field(converter=float)
 
     protocol: str = attrs.field(converter=str)
-    processing_pipeline: Optional[str] = attrs.field(converter=_optional(str), default=None)
-    notes: Optional[str] = attrs.field(converter=_optional(str), default=None)
+    processing_pipeline: str | None = attrs.field(converter=_optional(str), default=None)
+    notes: str | None = attrs.field(converter=_optional(str), default=None)
 
-    bg_date: Optional[pd.Timestamp] = attrs.field(converter=_optional(_to_timestamp), default=None)
-    bg_number: Optional[int] = attrs.field(converter=_optional(flexible_int), default=None)
-    dbg_date: Optional[pd.Timestamp] = attrs.field(converter=_optional(_to_timestamp), default=None)
-    dbg_number: Optional[int] = attrs.field(converter=_optional(flexible_int), default=None)
+    bg_date: pd.Timestamp | None = attrs.field(converter=_optional(_to_timestamp), default=None)
+    bg_number: int | None = attrs.field(converter=_optional(flexible_int), default=None)
+    dbg_date: pd.Timestamp | None = attrs.field(converter=_optional(_to_timestamp), default=None)
+    dbg_number: int | None = attrs.field(converter=_optional(flexible_int), default=None)
 
     additional_parameters: Mapping[str, str] = attrs.field(
         converter=lambda d: {str(k): str(v) for k, v in dict(d).items()},

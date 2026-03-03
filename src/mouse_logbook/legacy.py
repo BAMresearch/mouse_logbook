@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import attrs
 import pandas as pd
@@ -45,13 +45,13 @@ class Logbook2MouseEntry:
     samplethickness: float
 
     protocol: str
-    procpipeline: Optional[str] = None
-    notes: Optional[str] = None
+    procpipeline: str | None = None
+    notes: str | None = None
 
-    bgdate: Optional[pd.Timestamp] = None
-    bgnumber: Optional[int] = None
-    dbgdate: Optional[pd.Timestamp] = None
-    dbgnumber: Optional[int] = None
+    bgdate: pd.Timestamp | None = None
+    bgnumber: int | None = None
+    dbgdate: pd.Timestamp | None = None
+    dbgnumber: int | None = None
 
     additional_parameters: dict[str, str] = attrs.field(factory=dict)
 
@@ -66,7 +66,7 @@ class Logbook2MouseEntry:
         self.ymd = self.date.strftime("%Y%m%d")
 
     @classmethod
-    def from_enriched(cls, enriched: EnrichedLogbookEntry) -> "Logbook2MouseEntry":
+    def from_enriched(cls, enriched: EnrichedLogbookEntry) -> Logbook2MouseEntry:
         e = enriched.entry
         return cls(
             row_index=e.row_index,
@@ -141,7 +141,7 @@ class Logbook2MouseReader:
     project_base_path: Path = attrs.field(converter=Path)
 
     load_all: bool = attrs.field(default=False)
-    project_parser: Optional[Callable[[Path], Any]] = attrs.field(default=None)
+    project_parser: Callable[[Path], Any] | None = attrs.field(default=None)
 
     _entries: list[LogbookEntry] = attrs.field(init=False, factory=list)
     _enriched: list[EnrichedLogbookEntry] = attrs.field(init=False, factory=list)

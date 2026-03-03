@@ -1,13 +1,14 @@
+# src/mouse_logbook/cli.py
+
 from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from .adapters.project_xlsx import ProjectXlsxParser
-from .exceptions import ProjectNotFoundError, ProjectSheetFormatError
-from .project_repo import ProjectFileLocator
+from .exceptions import ProjectSheetFormatError
 
 
 def _configure_logging(verbosity: int) -> logging.Logger:
@@ -26,8 +27,7 @@ def _iter_project_files(project_base_dir: Path) -> Iterable[Path]:
     for year_dir in sorted(project_base_dir.glob("[0-9][0-9][0-9][0-9]")):
         if not year_dir.is_dir():
             continue
-        for p in sorted(year_dir.glob("*.xlsx")):
-            yield p
+        yield from sorted(year_dir.glob("*.xlsx"))
 
 
 def cmd_validate_projects(args: argparse.Namespace) -> int:
@@ -44,10 +44,11 @@ def cmd_validate_projects(args: argparse.Namespace) -> int:
     failures: list[str] = []
     checked = 0
 
-    if args.files:
-        files = [Path(f).expanduser().resolve() for f in args.files]
-    else:
-        files = list(_iter_project_files(base_dir))
+    files = (
+        [Path(f).expanduser().resolve() for f in args.files]
+        if args.files
+        else list(_iter_project_files(base_dir))
+    )
 
     if not files:
         log.warning("No project files found under %s", base_dir)

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import attrs
 import pandas as pd
@@ -32,7 +31,7 @@ def _is_blank(v: Any) -> bool:
     return v is None or (isinstance(v, float) and pd.isna(v)) or (isinstance(v, str) and not v.strip())
 
 
-def _as_float(v: Any) -> Optional[float]:
+def _as_float(v: Any) -> float | None:
     if _is_blank(v):
         return None
     try:
@@ -51,12 +50,12 @@ def _validate_email(email: str) -> None:
 class SampleComponent:
     component_id: str
     composition: str
-    density: Optional[float] = None
-    vol_frac: Optional[float] = None
-    mass_frac: Optional[float] = None
-    connection: Optional[str] = None
-    connected_to: Optional[str] = None
-    component_name: Optional[str] = None
+    density: float | None = None
+    vol_frac: float | None = None
+    mass_frac: float | None = None
+    connection: str | None = None
+    connected_to: str | None = None
+    component_name: str | None = None
 
 
 @attrs.frozen(kw_only=True, slots=True)
@@ -217,17 +216,17 @@ class ProjectXlsxParser:
         c_sample_id = col("sampleId")
         c_sample_name = col("sampleName")
         c_comp_id = col("componentId")
-        c_comp_name = cols.get("componentname", None)
+        c_comp_name = cols.get("componentname")
         c_comp = col("composition")
         c_density = col("density")
         c_vf = col("volFrac")
         c_mf = col("massFrac")
-        c_conn = cols.get("componentconnection", None)
-        c_conn_to = cols.get("componentconnectedto", None)
+        c_conn = cols.get("componentconnection")
+        c_conn_to = cols.get("componentconnectedto")
 
         # group rows into sample blocks: start when sampleId is present
         samples: dict[int, Sample] = {}
-        current_id: Optional[int] = None
+        current_id: int | None = None
         current_name: str = ""
         components: list[SampleComponent] = []
 

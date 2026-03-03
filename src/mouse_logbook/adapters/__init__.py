@@ -1,2 +1,2 @@
-__all__ = ["ProjectXlsxParser", "ProjectInfo", "Sample"]
-from .project_xlsx import ProjectXlsxParser, ProjectInfo, Sample
+__all__ = ["ProjectInfo", "ProjectXlsxParser", "Sample"]
+from .project_xlsx import ProjectInfo, ProjectXlsxParser, Sample
