@@ -140,5 +140,3 @@ env = SampleEnvironmentRepository(logbook)
 enricher = LogbookEnricher(projects=projects, environments=env)
 enriched = enricher.enrich_many(entries)
 ```
-
-If you want, I can also provide a shorter 10–15 line version of this summary for pasting into a smaller context window.
