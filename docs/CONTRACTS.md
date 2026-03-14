@@ -62,6 +62,26 @@
   - `xray`
 - Returns `ValidationReport[DatasetValidationResult]` and preserves successfully validated entries at each stage even when some issues are present.
 
+## NexusMetadataUpserter
+
+- Upserts one validated measurement into a `.nxs`/HDF5 file.
+- Input:
+  - one `MaterialEnrichedLogbookEntry`
+  - one matching `XrayEnrichedLogbookEntry`
+  - optionally one explicit `SampleXrayProperties` for nonstandard energies
+- Raises `NexusMetadataError` if the material/X-ray entries do not describe the same measurement or if the X-ray source cannot be resolved.
+- Writes compatibility metadata under:
+  - `/entry1/proposal`
+  - `/entry1/sample`
+  - `/entry1/sample/components`
+  - `/entry1/experiment`
+  - `/entry1/processing_required_metadata`
+- Selects the written X-ray metadata in this order:
+  - explicit `sample_xray=...`
+  - explicit `source_key=...`
+  - inferred from `sampos` (`Cu ...` -> `cu_ka`, `Mo ...` -> `mo_ka`)
+- Preserves existing `background_file` and `dispersed_background_file` dataset values by default because those paths are managed elsewhere.
+
 ## units
 
 - Provides a shared `pint` registry plus conversion helpers for cross-module unit handling.

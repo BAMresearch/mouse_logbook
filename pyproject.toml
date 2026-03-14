@@ -16,12 +16,16 @@ materials = [
   "periodictable",
   "xraydb",
 ]
+hdf5 = [
+  "h5py>=3.10",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6.0",
   "mypy>=1.8",
   "types-openpyxl",
   "pandas-stubs",
+  "h5py>=3.10",
 ]
 
 [tool.ruff]

@@ -94,6 +94,21 @@ where `year` is the first 4 digits of `proposal_id`.
   * Supports `core`, `chemistry`, `materials`, and `xray` levels.
   * Reuses the existing parser/enrichment/materials/X-ray layers rather than embedding duplicate validation logic.
 
+* `mouse_logbook.nexus_metadata.NexusMetadataUpserter`
+
+  * Upserts validated proposal/sample/logbook metadata into an existing or new `.nxs`/HDF5 file.
+  * Writes the compatibility paths used by the current downstream pipeline:
+    * `/entry1/proposal`
+    * `/entry1/sample`
+    * `/entry1/sample/components`
+    * `/entry1/experiment`
+    * `/entry1/processing_required_metadata`
+  * Selects the written X-ray metadata from either:
+    * explicit caller-provided `SampleXrayProperties`
+    * an explicit `source_key`
+    * or `sampos` inference (`Cu ...` / `Mo ...`) for the precomputed standard energies
+  * Preserves externally managed background-file path datasets by default while still updating the identifiers derived from the logbook.
+
 * `mouse_logbook.units`
 
   * Centralizes unit conversions with a shared `pint.UnitRegistry`.
@@ -160,6 +175,7 @@ mouse-logbook validate-dataset /path/to/logbook.xlsx /path/to/projects
 ### Tests included
 
 * Unit tests for model behavior, parsing errors, and CLI exit codes.
+* Unit tests for NeXus/HDF5 metadata writing against the current compatibility layout.
 * Functional test uses anonymized example files under `tests/data/`.
 
 ### Known limitation / migration note

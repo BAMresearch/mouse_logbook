@@ -23,6 +23,7 @@ Completed on the current branch:
 - Item 8 is implemented in `src/mouse_logbook/sample_metadata_materials.py` as the derived-material-properties layer on top of chemistry-validated sample metadata.
 - Item 9 is implemented in `src/mouse_logbook/sample_metadata_xray.py` as the X-ray property layer on top of chemistry-validated sample metadata.
 - Item 10 is implemented in `src/mouse_logbook/dataset_validation.py` and `src/mouse_logbook/cli.py` as the joined validation workflow and CLI entrypoint.
+- Item 11 is implemented in `src/mouse_logbook/nexus_metadata.py` as the compatibility NeXus/HDF5 metadata upsert layer.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -46,6 +47,12 @@ Completed on the current branch:
   - enrichment consistency failures across logbook, project, sample, and sample-environment joins
   - CLI exit codes for core and X-ray validation
   - lenient reporting for extension-layer chemistry failures
+- NeXus metadata writer tests now cover:
+  - compatibility path creation under `/entry1/...`
+  - Cu/Mo source selection from `sampos`
+  - explicit nonstandard-energy overrides
+  - preservation of externally managed background-file placeholders
+  - rejection of mismatched material/X-ray entry pairs
 - X-ray extension tests now cover:
   - Cu/Mo precomputation
   - arbitrary-energy calculation
@@ -55,7 +62,8 @@ Completed on the current branch:
   - real backend unit conversion against `periodictable` and `xraydb`
 - Unit conversions are now centralized in `src/mouse_logbook/units.py` and backed by `pint` instead of inline conversion constants.
 - The optional `materials` extra now includes both `periodictable` and `xraydb`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `66 passed`; `.venv/bin/ruff check src tests` -> passed.
+- The optional `hdf5` extra now includes `h5py`, and `h5py` is also listed in the `dev` extra for test runs.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `70 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -668,13 +676,43 @@ Verification:
 
 ## Testing Gaps To Add
 
-- HDF5 writer/upsert compatibility tests once the downstream file-writing contract is introduced.
+- CLI or service-level integration tests once the writer is wired into the runtime ingestion workflow.
 
 ## Notes From This Review
 
 - The package design is directionally good: the core parsing/enrichment split is much cleaner than the legacy `ProjectReader`.
 - The main risk is not missing code volume; it is letting the new chemistry/X-ray work leak back into the core parser layer.
-- The next implementation step should be the HDF5 writer/upsert layer, using the new validated/enriched dataset outputs without re-embedding parsing logic there.
+- The next implementation step should be wiring the HDF5 writer/upsert layer into the ingestion runtime once the external file-writing call site is settled.
+
+### 11. Add a compatibility NeXus/HDF5 metadata upsert layer
+
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/nexus_metadata.py`
+- `tests/unit/test_nexus_metadata.py`
+
+Problem:
+
+- The new package could validate and enrich metadata, but it still had no writer that could push those validated values into the `.nxs` files used by the current downstream processing pipeline.
+- The file layout is partially legacy and partially evolved over time, so compatibility depends on matching the current path names rather than inventing a cleaner schema prematurely.
+
+Implemented change:
+
+- Added `NexusMetadataUpserter` to upsert:
+  - proposal metadata into `/entry1/proposal`
+  - sample metadata into `/entry1/sample`
+  - per-phase metadata into `/entry1/sample/components`
+  - logbook experiment metadata into `/entry1/experiment`
+  - processing identifiers into `/entry1/processing_required_metadata`
+- The writer consumes the validated materials/X-ray layers instead of re-deriving chemistry or X-ray properties internally.
+- `overall_mu` and per-phase `mu` / `sld_real` / `sld_imag` are written for the selected X-ray energy.
+- Standard source selection defaults to `sampos` inference:
+  - `Cu ...` -> `cu_ka`
+  - `Mo ...` -> `mo_ka`
+- Nonstandard energies are supported by passing an explicit `SampleXrayProperties` object.
+- Existing `background_file` and `dispersed_background_file` datasets are preserved by default because those file paths are assigned elsewhere.
 
 ## Execution Note
 

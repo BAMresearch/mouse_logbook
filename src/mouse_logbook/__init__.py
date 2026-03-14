@@ -10,6 +10,7 @@ from .exceptions import (
 )
 from .legacy import Logbook2MouseEntry, Logbook2MouseReader
 from .models import EnrichedLogbookEntry, LogbookEntry
+from .nexus_metadata import NexusMetadataError, NexusMetadataUpserter
 
 __all__ = [
     "EnrichedLogbookEntry",
@@ -18,6 +19,8 @@ __all__ = [
     "LogbookEntry",
     "LogbookError",
     "LogbookFormatError",
+    "NexusMetadataError",
+    "NexusMetadataUpserter",
     "ProjectFileAmbiguityError",
     "ProjectNotFoundError",
     "ProjectSheetFormatError",
