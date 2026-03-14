@@ -9,6 +9,16 @@ Reviewed:
 
 This backlog separates confirmed implementation issues from feature work. The goal is to make the package reliable first, then add chemistry-aware sample validation and derived material/X-ray properties in a clean extension layer.
 
+## Progress Update
+
+Completed on the current branch:
+
+- Item 1 is implemented in `src/mouse_logbook/adapters/project_xlsx.py`.
+- The proposal parser now preserves component data when it appears on the same row as `sampleId`.
+- Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
+- Regression tests were added for both supported sample-block layouts in `tests/unit/test_project_xlsx_parser.py`.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `11 passed`.
+
 ## Recommendation
 
 Do **not** fold chemistry parsing and X-ray calculations directly into the core logbook/parser layer.
@@ -33,7 +43,14 @@ Reasoning:
 
 ### 1. Fix proposal parsing for sample-start rows that also contain the first component
 
-Current code: `src/mouse_logbook/adapters/project_xlsx.py:299-312`
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/adapters/project_xlsx.py`
+- `tests/unit/test_project_xlsx_parser.py`
+
+Original issue location: `src/mouse_logbook/adapters/project_xlsx.py` sample-block loop
 
 Problem:
 
@@ -55,10 +72,23 @@ Proposed change:
   - sample header row with component data
   - sample header row followed by separate component rows
 
+Implemented change:
+
+- Removed the early `continue` on sample-start rows so the same row can also be parsed as a component row.
+- Added parser helpers for blank-safe text handling so `pd.NA`/`NaN` values are not converted into fake strings such as `"nan"`.
+- Added regression coverage for:
+  - sample-start rows that contain the first component
+  - equivalent layouts where components begin on continuation rows
+
 Acceptance criteria:
 
 - Both proposal layouts parse to the same component list.
 - No component is lost solely because it appears on the first row of a sample block.
+
+Verification:
+
+- `tests/unit/test_project_xlsx_parser.py`
+- Full test suite currently passes in the project virtualenv.
 
 ### 2. Replace `strict`/`lenient` boolean behavior with structured validation results
 
