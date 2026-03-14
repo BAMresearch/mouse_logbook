@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from .adapters.project_xlsx import ProjectXlsxParser
-from .exceptions import ProjectSheetFormatError
+from .validation import ValidationIssue
 
 
 def _configure_logging(verbosity: int) -> logging.Logger:
@@ -18,8 +18,20 @@ def _configure_logging(verbosity: int) -> logging.Logger:
     elif verbosity >= 2:
         level = logging.DEBUG
 
-    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
     return logging.getLogger("mouse_logbook")
+
+
+def _log_issue(log: logging.Logger, file_path: Path, issue: ValidationIssue, *, strict: bool) -> str:
+    line = f"{file_path}: {issue.severity}: {issue}"
+    if issue.severity == "info":
+        level = logging.INFO
+    elif issue.severity == "warning":
+        level = logging.WARNING
+    else:
+        level = logging.ERROR if strict else logging.WARNING
+    log.log(level, "%s", line)
+    return line
 
 
 def _iter_project_files(project_base_dir: Path) -> Iterable[Path]:
@@ -41,7 +53,9 @@ def cmd_validate_projects(args: argparse.Namespace) -> int:
     strict = not args.lenient
     parser = ProjectXlsxParser(strict=strict)
 
-    failures: list[str] = []
+    validation_failures: list[str] = []
+    fatal_failures: list[str] = []
+    report_lines: list[str] = []
     checked = 0
 
     files = (
@@ -57,24 +71,56 @@ def cmd_validate_projects(args: argparse.Namespace) -> int:
     for f in files:
         checked += 1
         try:
-            proj = parser.parse(f)
-            log.info("OK: %s (proposal_id=%s) samples=%d", f.name, proj.proposal_id, len(proj.samples))
-        except ProjectSheetFormatError as e:
-            failures.append(f"{f}: {e}")
-            log.error("FAIL: %s", e)
+            report = parser.inspect(f)
+            error_issues = report.issues_for("error")
+            warning_issues = report.issues_for("warning")
+
+            for issue in report.issues:
+                report_lines.append(_log_issue(log, f, issue, strict=strict))
+
+            if error_issues:
+                failure = f"{f}: " + "; ".join(str(issue) for issue in error_issues)
+                if strict:
+                    validation_failures.append(failure)
+                    log.error("FAIL: %s", failure)
+                else:
+                    log.warning("WARN: %s has %d validation error(s) in lenient mode.", f.name, len(error_issues))
+            elif warning_issues:
+                log.warning("WARN: %s has %d validation warning(s).", f.name, len(warning_issues))
+            else:
+                proj = report.value
+                log.info("OK: %s (proposal_id=%s) samples=%d", f.name, proj.proposal_id, len(proj.samples))
         except Exception as e:
-            failures.append(f"{f}: {e}")
+            failure = f"{f}: {e}"
+            fatal_failures.append(failure)
+            report_lines.append(failure)
             log.exception("ERROR: unexpected failure while parsing %s", f)
 
-    if failures:
-        log.error("Validation failed: %d/%d files invalid.", len(failures), checked)
-        if args.report:
-            report_path = Path(args.report).expanduser().resolve()
-            report_path.write_text("\n".join(failures) + "\n", encoding="utf-8")
-            log.error("Wrote report: %s", report_path)
+    if args.report:
+        report_path = Path(args.report).expanduser().resolve()
+        text = ""
+        if report_lines:
+            text = "\n".join(report_lines) + "\n"
+        report_path.write_text(text, encoding="utf-8")
+        log.info("Wrote report: %s", report_path)
+
+    if strict and (validation_failures or fatal_failures):
+        total_failures = len(validation_failures) + len(fatal_failures)
+        log.error("Validation failed: %d/%d files invalid.", total_failures, checked)
         return 1
 
-    log.info("Validation succeeded: %d files checked.", checked)
+    if fatal_failures:
+        log.error("Validation encountered %d unexpected failure(s).", len(fatal_failures))
+        return 1
+
+    if strict:
+        log.info("Validation succeeded: %d files checked.", checked)
+    else:
+        issue_count = len(report_lines)
+        if issue_count:
+            log.warning("Lenient validation completed: %d files checked, %d issue(s) reported.", checked, issue_count)
+        else:
+            log.info("Lenient validation succeeded: %d files checked.", checked)
     return 0
 
 
@@ -96,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument(
         "--lenient",
         action="store_true",
-        help="Do not fail on schema problems (logs problems). Defaults to strict (fails).",
+        help="Report schema problems without failing validation. Defaults to strict (fails on errors).",
     )
     v.add_argument(
         "--report",

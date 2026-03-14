@@ -14,10 +14,14 @@ This backlog separates confirmed implementation issues from feature work. The go
 Completed on the current branch:
 
 - Item 1 is implemented in `src/mouse_logbook/adapters/project_xlsx.py`.
+- Item 2 is implemented via structured validation reports in `src/mouse_logbook/validation.py`, `src/mouse_logbook/adapters/project_xlsx.py`, and `src/mouse_logbook/cli.py`.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
+- The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
+- `mouse-logbook validate-projects --lenient` now reports validation problems and can write them to `--report` without returning a failing exit code for schema issues.
 - Regression tests were added for both supported sample-block layouts in `tests/unit/test_project_xlsx_parser.py`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `11 passed`.
+- Validation-report tests were added in `tests/unit/test_project_xlsx_parser_validation.py` and `tests/unit/test_cli_validate_projects.py`.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `13 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -92,6 +96,14 @@ Verification:
 
 ### 2. Replace `strict`/`lenient` boolean behavior with structured validation results
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/validation.py`
+- `src/mouse_logbook/adapters/project_xlsx.py`
+- `src/mouse_logbook/cli.py`
+
 Current code:
 
 - `src/mouse_logbook/adapters/project_xlsx.py:233-284`
@@ -116,11 +128,28 @@ Proposed change:
   - severities such as `error`, `warning`, `info`
 - Let the parser return parsed data plus issues, and let the CLI decide whether issues are fatal.
 
+Implemented change:
+
+- Added reusable `ValidationIssue` and `ValidationReport` types.
+- Added `ProjectXlsxParser.inspect(...)` to return parsed project data together with collected issues.
+- Kept `ProjectXlsxParser.parse(...)` compatible for existing strict consumers by raising only when `strict=True` and error issues are present.
+- Updated the CLI to:
+  - log structured issues
+  - fail in strict mode on validation errors
+  - continue in lenient mode while still reporting the issues
+  - write issue lines to `--report`
+
 Acceptance criteria:
 
 - `--lenient` emits warnings without pretending the file is clean.
 - `--report` can contain both hard errors and warnings.
 - The same validation engine can later host chemistry/sample issues.
+
+Verification:
+
+- `tests/unit/test_project_xlsx_parser_validation.py`
+- `tests/unit/test_cli_validate_projects.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 3. Harden the sample-environment parser against layout drift
 

@@ -41,3 +41,25 @@ def test_cli_validate_projects_exit_codes(tmp_path: Path) -> None:
 
     rc2 = main(["validate-projects", str(base)])
     assert rc2 == 1
+
+
+def test_cli_validate_projects_lenient_reports_issues(tmp_path: Path) -> None:
+    base = tmp_path / "projects"
+    year = base / "2025"
+    year.mkdir(parents=True)
+
+    p_bad = year / "2025002.xlsx"
+    df_proj_bad = pd.DataFrame({"k": ["Name", "Organisation", "Email", "Title", "What"], "v": ["", "O", "bad", "T", ""]})
+    df_samples_bad = pd.DataFrame(columns=["sampleId", "sampleName", "componentId", "composition", "density", "volFrac", "massFrac"])
+    with pd.ExcelWriter(p_bad, engine="openpyxl") as w:
+        df_proj_bad.to_excel(w, sheet_name="Project_Info", index=False)
+        df_samples_bad.to_excel(w, sheet_name="Sample_Info", index=False, startrow=2)
+
+    report = tmp_path / "validation_report.txt"
+    rc = main(["validate-projects", str(base), "--lenient", "--report", str(report)])
+
+    assert rc == 0
+    contents = report.read_text(encoding="utf-8")
+    assert "Project_Info: missing Name" in contents
+    assert "Project_Info: Invalid email address: 'bad'" in contents
+    assert "Sample_Info: no samples found in Sample_Info" in contents

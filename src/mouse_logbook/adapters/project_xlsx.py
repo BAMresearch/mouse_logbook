@@ -7,6 +7,7 @@ import attrs
 import pandas as pd
 
 from ..exceptions import ProjectSheetFormatError
+from ..validation import ValidationIssue, ValidationReport
 
 
 def _normalize_proposal_id(value: Any) -> str:
@@ -62,6 +63,10 @@ def _validate_email(email: str) -> None:
         raise ProjectSheetFormatError(f"Invalid email address: {email!r}")
 
 
+def _error(location: str, message: str) -> ValidationIssue:
+    return ValidationIssue(severity="error", location=location, message=message)
+
+
 @attrs.frozen(kw_only=True, slots=True)
 class SampleComponent:
     component_id: str
@@ -114,7 +119,6 @@ class ProjectXlsxParser:
     sample_header_row: int = 2
     strict: bool = True
 
-    # ---- schema requirements ----
     required_project_fields: tuple[str, ...] = ("name", "organisation", "email", "title", "what")
     required_sample_columns: tuple[str, ...] = (
         "sampleId",
@@ -127,9 +131,23 @@ class ProjectXlsxParser:
     )
 
     def parse(self, file_path: Path) -> ProjectInfo:
-        file_path = Path(file_path)
+        report = self.inspect(file_path)
+        if report.has_errors and self.strict:
+            raise ProjectSheetFormatError(
+                f"{Path(file_path).name}: " + "; ".join(str(issue) for issue in report.issues_for("error"))
+            )
+        return report.value
 
-        info = self._read_project_info(file_path)
+    def inspect(self, file_path: Path) -> ValidationReport[ProjectInfo]:
+        file_path = Path(file_path)
+        issues: list[ValidationIssue] = []
+
+        try:
+            info = self._read_project_info(file_path)
+        except ValueError as e:
+            info = {}
+            issues.append(_error("Project_Info", str(e)))
+
         proposal_id = _normalize_proposal_id(info.get("proposal")) or _normalize_proposal_id(file_path.stem)
 
         name = _as_text(info.get("name", ""))
@@ -138,29 +156,32 @@ class ProjectXlsxParser:
         title = _as_text(info.get("title", ""))
         description = _as_text(info.get("what", ""))
 
-        self._validate_project_info(
-            proposal_id=proposal_id,
-            name=name,
-            organisation=organisation,
-            email=email,
-            title=title,
-            description=description,
-            file_path=file_path,
+        issues.extend(
+            self._validate_project_info(
+                proposal_id=proposal_id,
+                name=name,
+                organisation=organisation,
+                email=email,
+                title=title,
+                description=description,
+            )
         )
 
-        samples = self._read_samples(file_path)
+        sample_report = self._read_samples(file_path)
+        issues.extend(sample_report.issues)
 
-        return ProjectInfo(
-            proposal_id=proposal_id,
-            name=name,
-            email=email,
-            organisation=organisation,
-            title=title,
-            description=description,
-            samples=samples,
+        return ValidationReport(
+            value=ProjectInfo(
+                proposal_id=proposal_id,
+                name=name,
+                email=email,
+                organisation=organisation,
+                title=title,
+                description=description,
+                samples=sample_report.value,
+            ),
+            issues=tuple(issues),
         )
-
-    # ---- Project_Info ----
 
     def _read_project_info(self, file_path: Path) -> dict[str, Any]:
         df = pd.read_excel(
@@ -182,22 +203,21 @@ class ProjectXlsxParser:
         email: str,
         title: str,
         description: str,
-        file_path: Path,
-    ) -> None:
+    ) -> tuple[ValidationIssue, ...]:
         problems: list[str] = []
         if _is_blank(proposal_id):
             problems.append("missing proposal id (expected in filename or 'proposal' field)")
 
         if _is_blank(name):
-            problems.append("Project_Info: missing Name")
+            problems.append("missing Name")
         if _is_blank(organisation):
-            problems.append("Project_Info: missing Organisation")
+            problems.append("missing Organisation")
         if _is_blank(email):
-            problems.append("Project_Info: missing Email")
+            problems.append("missing Email")
         if _is_blank(title):
-            problems.append("Project_Info: missing Title")
+            problems.append("missing Title")
         if _is_blank(description):
-            problems.append("Project_Info: missing What/Description")
+            problems.append("missing What/Description")
 
         if not _is_blank(email):
             try:
@@ -205,29 +225,35 @@ class ProjectXlsxParser:
             except ProjectSheetFormatError as e:
                 problems.append(str(e))
 
-        if problems and self.strict:
-            raise ProjectSheetFormatError(f"{file_path.name}: invalid Project_Info: " + "; ".join(problems))
+        return tuple(_error("Project_Info", problem) for problem in problems)
 
-    # ---- Sample_Info ----
+    def _read_samples(self, file_path: Path) -> ValidationReport[dict[int, Sample]]:
+        issues: list[ValidationIssue] = []
 
-    def _read_samples(self, file_path: Path) -> dict[int, Sample]:
-        df = pd.read_excel(
-            file_path,
-            sheet_name=self.sample_info_sheet,
-            header=self.sample_header_row,
-            engine="openpyxl",
-        ).dropna(axis=0, thresh=2)
+        try:
+            df = pd.read_excel(
+                file_path,
+                sheet_name=self.sample_info_sheet,
+                header=self.sample_header_row,
+                engine="openpyxl",
+            ).dropna(axis=0, thresh=2)
+        except ValueError as e:
+            issues.append(_error("Sample_Info", str(e)))
+            return ValidationReport(value={}, issues=tuple(issues))
 
-        # validate presence of required columns (support capitalization variants)
-        cols = {c.lower(): c for c in df.columns}
-        def col(name: str) -> str:
-            key = name.lower()
-            if key not in cols:
-                raise ProjectSheetFormatError(
-                    f"{file_path.name}: Sample_Info missing required column {name!r}. "
-                    f"Found columns={list(df.columns)!r}"
+        cols = {str(c).lower(): c for c in df.columns}
+        missing_columns = [name for name in self.required_sample_columns if name.lower() not in cols]
+        if missing_columns:
+            issues.append(
+                _error(
+                    "Sample_Info",
+                    f"missing required columns {missing_columns!r}. Found columns={list(df.columns)!r}",
                 )
-            return cols[key]
+            )
+            return ValidationReport(value={}, issues=tuple(issues))
+
+        def col(name: str) -> str:
+            return cols[name.lower()]
 
         c_sample_id = col("sampleId")
         c_sample_name = col("sampleName")
@@ -240,23 +266,34 @@ class ProjectXlsxParser:
         c_conn = cols.get("componentconnection")
         c_conn_to = cols.get("componentconnectedto")
 
-        # group rows into sample blocks: start when sampleId is present
         samples: dict[int, Sample] = {}
         current_id: int | None = None
         current_name: str = ""
         components: list[SampleComponent] = []
+
+        def append_sample_issue(message: str) -> None:
+            issues.append(_error("Sample_Info", message))
+
+        def component_float(field_name: str, value: Any, *, sample_id: int | None, component_id: str) -> float | None:
+            try:
+                return _as_float(value)
+            except ProjectSheetFormatError as e:
+                sample_label = "?" if sample_id is None else str(sample_id)
+                component_label = component_id or "<missing componentId>"
+                append_sample_issue(
+                    f"sampleId={sample_label}: component {component_label!r} invalid {field_name}: {e}"
+                )
+                return None
 
         def finalize_sample() -> None:
             nonlocal current_id, current_name, components
             if current_id is None:
                 return
 
-            # schema checks per sample
             problems: list[str] = []
             if _is_blank(current_name):
                 problems.append(f"sampleId={current_id}: missing sampleName")
 
-            # at least one component with composition
             if not components:
                 problems.append(f"sampleId={current_id}: no component rows found (expected at least one)")
             else:
@@ -266,40 +303,30 @@ class ProjectXlsxParser:
                     if _is_blank(comp.composition):
                         problems.append(f"sampleId={current_id}: component {comp.component_id!r} missing composition")
                     if comp.density is not None and comp.density <= 0:
-                        problems.append(
-                            f"sampleId={current_id}: component {comp.component_id!r} has non-positive density"
-                        )
+                        problems.append(f"sampleId={current_id}: component {comp.component_id!r} has non-positive density")
                     if comp.vol_frac is not None and not (0.0 <= comp.vol_frac <= 1.0):
-                        problems.append(
-                            f"sampleId={current_id}: component {comp.component_id!r} volFrac out of range"
-                        )
+                        problems.append(f"sampleId={current_id}: component {comp.component_id!r} volFrac out of range")
                     if comp.mass_frac is not None and not (0.0 <= comp.mass_frac <= 1.0):
-                        problems.append(
-                            f"sampleId={current_id}: component {comp.component_id!r} massFrac out of range"
-                        )
+                        problems.append(f"sampleId={current_id}: component {comp.component_id!r} massFrac out of range")
 
-                # if all vol_frac are provided, check they sum to ~1
                 vfs = [c.vol_frac for c in components if c.vol_frac is not None]
                 if len(vfs) == len(components):
-                    s = sum(vfs)
-                    if abs(s - 1.0) > 1e-3:
-                        problems.append(f"sampleId={current_id}: volFrac sums to {s:.6f}, expected ~1.0")
+                    total = sum(vfs)
+                    if abs(total - 1.0) > 1e-3:
+                        problems.append(f"sampleId={current_id}: volFrac sums to {total:.6f}, expected ~1.0")
 
-                # if all mass_frac are provided, check they sum to ~1
                 mfs = [c.mass_frac for c in components if c.mass_frac is not None]
                 if len(mfs) == len(components):
-                    s = sum(mfs)
-                    if abs(s - 1.0) > 1e-3:
-                        problems.append(f"sampleId={current_id}: massFrac sums to {s:.6f}, expected ~1.0")
+                    total = sum(mfs)
+                    if abs(total - 1.0) > 1e-3:
+                        problems.append(f"sampleId={current_id}: massFrac sums to {total:.6f}, expected ~1.0")
 
-                # ensure at least one of volFrac/massFrac is provided somewhere (otherwise components are unusable)
                 if all(c.vol_frac is None for c in components) and all(c.mass_frac is None for c in components):
                     problems.append(f"sampleId={current_id}: neither volFrac nor massFrac provided for any component")
 
-            if problems and self.strict:
-                raise ProjectSheetFormatError(f"{file_path.name}: invalid Sample_Info: " + "; ".join(problems))
+            for problem in problems:
+                append_sample_issue(problem)
 
-            # derive a human-readable composition summary from components
             comp_summary = ", ".join([c.composition for c in components if not _is_blank(c.composition)])
             samples[current_id] = Sample(
                 sample_id=current_id,
@@ -315,32 +342,36 @@ class ProjectXlsxParser:
         for _, row in df.iterrows():
             sid_raw = row.get(c_sample_id, None)
             if not _is_blank(sid_raw):
-                # start new sample block
                 finalize_sample()
                 try:
                     sid = int(float(sid_raw))
-                except Exception as e:
-                    raise ProjectSheetFormatError(f"{file_path.name}: invalid sampleId value {sid_raw!r}") from e
+                except Exception:
+                    append_sample_issue(f"invalid sampleId value {sid_raw!r}")
+                    current_id = None
+                    current_name = ""
+                    components = []
+                    continue
                 if sid in samples:
-                    raise ProjectSheetFormatError(f"{file_path.name}: duplicate sampleId={sid}")
+                    append_sample_issue(f"duplicate sampleId={sid}")
+                    current_id = None
+                    current_name = ""
+                    components = []
+                    continue
                 current_id = sid
                 current_name = _as_text(row.get(c_sample_name, ""))
 
             if current_id is None:
-                # ignore leading/stray rows before first sample
                 continue
 
-            # Component data may live either on the sample-start row or on continuation rows.
             comp_id = _as_text(row.get(c_comp_id, ""))
             composition = _as_text(row.get(c_comp, ""))
-            density = _as_float(row.get(c_density, None))
-            vol_frac = _as_float(row.get(c_vf, None))
-            mass_frac = _as_float(row.get(c_mf, None))
+            density = component_float("density", row.get(c_density, None), sample_id=current_id, component_id=comp_id)
+            vol_frac = component_float("volFrac", row.get(c_vf, None), sample_id=current_id, component_id=comp_id)
+            mass_frac = component_float("massFrac", row.get(c_mf, None), sample_id=current_id, component_id=comp_id)
             connection = _as_optional_text(row.get(c_conn, "")) if c_conn else None
             connected_to = _as_optional_text(row.get(c_conn_to, "")) if c_conn_to else None
             component_name = _as_optional_text(row.get(c_comp_name, "")) if c_comp_name else None
 
-            # if the row is effectively blank, skip
             if _is_blank(comp_id) and _is_blank(composition) and density is None and vol_frac is None and mass_frac is None:
                 continue
 
@@ -359,6 +390,7 @@ class ProjectXlsxParser:
 
         finalize_sample()
 
-        if not samples and self.strict:
-            raise ProjectSheetFormatError(f"{file_path.name}: no samples found in Sample_Info")
-        return samples
+        if not samples:
+            append_sample_issue("no samples found in Sample_Info")
+
+        return ValidationReport(value=samples, issues=tuple(issues))
