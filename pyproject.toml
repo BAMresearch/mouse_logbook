@@ -11,6 +11,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+materials = [
+  "periodictable",
+  "xraydb",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6.0",

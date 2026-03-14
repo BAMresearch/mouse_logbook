@@ -29,6 +29,20 @@
 - Maps parsed proposal-sheet `ProjectInfo` / `Sample` objects into richer sample-metadata extension models.
 - Returns `ValidationReport[...]` so extension-level issues can be collected without changing the core parser contract.
 
+## SampleMetadataChemistryValidator
+
+- Validates chemistry descriptions for sample-metadata extension objects.
+- Uses a pluggable interpreter interface so the chemistry backend is optional and replaceable.
+- Returns `ValidationReport[...]` and preserves the original component description alongside parsed formula metadata.
+
+## SampleMetadataXrayCalculator
+
+- Computes X-ray properties from chemistry-validated sample metadata, not from raw proposal parsing.
+- `calculate_sample_at_energy(sample, energy_kev=...)` returns per-phase properties plus overall absorption when the required fractions are available.
+- `precompute_sample(...)`, `precompute_project(...)`, and `precompute_enriched_entry(...)` attach standard Cu/Mo calculations to extension models.
+- Exposes absorption in `1/m` and scattering length densities in `1/m^2`.
+- Uses optional `periodictable` + `xraydb` backends behind the `materials` extra.
+
 ## Logbook2MouseReader (legacy façade)
 
 - Provides iteration over **enriched entries**

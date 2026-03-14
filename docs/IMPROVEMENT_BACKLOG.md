@@ -19,6 +19,8 @@ Completed on the current branch:
 - Item 4 is implemented in `src/mouse_logbook/project_repo.py` with a dedicated `ProjectFileAmbiguityError`.
 - Item 5 is implemented in `src/mouse_logbook/io_excel.py` via explicit row parsing and `inspect_entries()`.
 - Item 6 is implemented in `src/mouse_logbook/sample_metadata.py` as the initial sample-metadata extension boundary.
+- Item 7 is implemented in `src/mouse_logbook/sample_metadata_chemistry.py` as the chemistry-validation layer on top of sample metadata.
+- Item 9 is implemented in `src/mouse_logbook/sample_metadata_xray.py` as the X-ray property layer on top of chemistry-validated sample metadata.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -29,7 +31,16 @@ Completed on the current branch:
 - Project-repository tests now cover single-match, no-match, ambiguous-match, caching, and missing-sample behavior.
 - Logbook-reader tests now cover structural issues, row-level field validation, optional field validation, filtering, and issue collection.
 - Sample-metadata extension tests now cover project/sample mapping, duplicate component IDs, inconsistent enriched entries, and aggregation.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `34 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Chemistry-validation tests now cover valid formulas, invalid formulas, missing descriptions, interpreter failures, and enriched-entry wrapping.
+- X-ray extension tests now cover:
+  - Cu/Mo precomputation
+  - arbitrary-energy calculation
+  - overall absorption derived from mass fractions
+  - warnings when aggregate absorption cannot be derived
+  - missing density / missing parsed formula failures
+  - real backend unit conversion against `periodictable` and `xraydb`
+- The optional `materials` extra now includes both `periodictable` and `xraydb`.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `47 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -370,6 +381,13 @@ Verification:
 
 ### 7. Add chemistry validation of component descriptions
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/sample_metadata_chemistry.py`
+- `tests/unit/test_sample_metadata_chemistry.py`
+
 Legacy reference:
 
 - `project_reader.py:40-66`
@@ -386,6 +404,20 @@ Proposed change:
 - Validate each component independently before computing any aggregate sample properties.
 - Preserve the original entered string and the parsed/normalized representation.
 
+Implemented change:
+
+- Added `ParsedChemicalFormula` plus chemistry-validated extension models for components, samples, projects, and enriched entries.
+- Added `SampleMetadataChemistryValidator` as a separate layer on top of `sample_metadata`.
+- Added an interpreter interface so chemistry parsing is pluggable:
+  - tests use fake interpreters
+  - real runs can use `PeriodictableChemistryInterpreter`
+- Added validation for:
+  - missing chemistry descriptions
+  - interpreter/backend failures
+  - invalid/unparseable formulas
+  - non-positive densities at the chemistry-validation layer
+- Preserved the original composition string while storing parsed/normalized formula information separately.
+
 Validation checks:
 
 - Formula string is parseable
@@ -398,6 +430,11 @@ Important migration note:
 
 - Do not copy the legacy behavior of silently normalizing fractions (`project_reader.py:103-120`).
 - Normalization should only happen when explicitly requested and should always be reported.
+
+Verification:
+
+- `tests/unit/test_sample_metadata_chemistry.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 8. Add derived sample composition and density estimates
 
@@ -423,6 +460,13 @@ Acceptance criteria:
 
 ### 9. Add X-ray property calculations with explicit SI units
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/sample_metadata_xray.py`
+- `tests/unit/test_sample_metadata_xray.py`
+
 Legacy reference:
 
 - `project_reader.py:59-66`
@@ -439,6 +483,39 @@ Proposed change:
 - Keep this in the extension layer with optional dependencies.
 - Use explicit result types rather than anonymous floats.
 - Treat units as part of the API, not a comment.
+- Make energy an explicit input to all X-ray calculations rather than a hidden default.
+
+Implemented change:
+
+- Added explicit X-ray result models:
+  - `ScatteringLengthDensity`
+  - `PhaseXrayProperties`
+  - `SampleXrayProperties`
+- Added X-ray-enriched extension models for samples, projects, and enriched logbook entries.
+- Added `SampleMetadataXrayCalculator` with:
+  - `calculate_sample_at_energy(..., energy_kev=...)` for arbitrary energies
+  - precomputation of standard lab-source values on samples/projects/enriched entries
+- Standard precomputed energies are now:
+  - `cu_ka = 8.04 keV`
+  - `mo_ka = 17.4 keV`
+- Added a real optional backend using:
+  - `xraydb.material_mu(...)` for absorption coefficients
+  - `periodictable.xsf.xray_sld(...)` for scattering length densities
+- The implementation converts library outputs into explicit SI-facing API fields:
+  - absorption coefficient in `1/m`
+  - real/imaginary SLD in `1/m^2`
+- Overall sample absorption is computed:
+  - directly from `volume_fraction` when complete
+  - from volume fractions derived from `mass_fraction` and density when needed
+  - otherwise left unavailable with a structured warning rather than a silent partial result
+- The `mouse_logbook[materials]` optional dependency set now includes both `periodictable` and `xraydb`.
+
+Design note from current experimental practice:
+
+- Common lab-source energies are:
+  - copper source: `8.04 keV`
+  - molybdenum source: `17.4 keV`
+- Synchrotron measurements may use other energies, so the API must support arbitrary energies cleanly.
 
 Suggested result shapes:
 
@@ -451,6 +528,18 @@ Important migration note:
 
 - Avoid broad `except Exception` recovery like the legacy `Sample.__attrs_post_init__` (`project_reader.py:85-95`).
 - Scientific calculations should fail explicitly or emit structured warnings with provenance.
+
+Important implementation note:
+
+- `periodictable` and `xraydb` use different energy conventions:
+  - `periodictable.xsf.xray_sld(..., energy=...)` expects `keV`
+  - `xraydb.material_mu(..., energy=...)` expects `eV`
+- The extension layer hides that mismatch and exposes a consistent `energy_kev` API.
+
+Verification:
+
+- `tests/unit/test_sample_metadata_xray.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 10. Add proposal validation that spans logbook, proposal, and sample semantics
 
@@ -483,26 +572,26 @@ Acceptance criteria:
 4. Create the sample/material extension boundary.
 5. Implement chemistry validation with tests.
 6. Implement density/composition derivation.
-7. Implement X-ray property calculations with explicit units.
-8. Add an end-to-end validator that joins logbook, proposal, samples, and optional materials checks.
+7. Add an end-to-end validator that joins logbook, proposal, samples, and optional materials checks.
 
 ## Testing Gaps To Add
 
-- Proposal parser handles first-row component data.
-- Proposal parser detects ambiguous fractions and reports them cleanly.
-- Lenient validation still emits warnings.
-- Sample-environment parser handles optional leading unnamed columns.
-- Ambiguous proposal file matches fail explicitly.
-- Chemistry parser rejects malformed formulas.
 - Derived density/composition results are provenance-tagged.
-- X-ray outputs are unit-tested and conversion-tested.
+- Joined validation workflow covers:
+  - core-only validation
+  - chemistry-enabled validation
+  - X-ray-enabled validation
+  - report generation across all layers
 
 ## Notes From This Review
 
 - The package design is directionally good: the core parsing/enrichment split is much cleaner than the legacy `ProjectReader`.
 - The main risk is not missing code volume; it is letting the new chemistry/X-ray work leak back into the core parser layer.
-- The next implementation step should be item 1 or item 2, not the chemistry feature itself.
+- The next implementation step should be item 8: derived sample composition and density estimates, followed by item 10 for end-to-end validation.
 
 ## Execution Note
 
-I could not run the local test suite in this environment because `pytest` is not installed here (`python3 -m pytest` fails with `No module named pytest`).
+The current branch verifies in the project virtualenv with:
+
+- `.venv/bin/python -m pytest tests`
+- `.venv/bin/ruff check src tests`

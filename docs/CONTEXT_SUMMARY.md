@@ -70,6 +70,17 @@ where `year` is the first 4 digits of `proposal_id`.
 
   * Wraps `EnrichedLogbookEntry` values into a metadata-aware extension type while preserving the existing core enrichment pipeline.
 
+* `mouse_logbook.sample_metadata_chemistry.SampleMetadataChemistryValidator`
+
+  * Validates chemistry descriptions for sample-metadata components without pushing chemistry dependencies into the core parser layer.
+  * Supports a pluggable interpreter so tests can use fakes and real runs can use `periodictable`.
+
+* `mouse_logbook.sample_metadata_xray.SampleMetadataXrayCalculator`
+
+  * Computes per-phase X-ray absorption coefficients and scattering length densities from chemistry-validated metadata.
+  * Precomputes standard Cu (`8.04 keV`) and Mo (`17.4 keV`) values while still exposing arbitrary-energy calculations.
+  * Uses optional `periodictable` and `xraydb` backends, but keeps that dependency boundary outside the core parser/enrichment path.
+
 #### Enrichment (joining)
 
 * `mouse_logbook.services.LogbookEnricher`
