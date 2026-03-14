@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from .adapters.project_xlsx import ProjectXlsxParser
+from .dataset_validation import DatasetValidator
 from .validation import ValidationIssue
 
 
@@ -24,6 +25,18 @@ def _configure_logging(verbosity: int) -> logging.Logger:
 
 def _log_issue(log: logging.Logger, file_path: Path, issue: ValidationIssue, *, strict: bool) -> str:
     line = f"{file_path}: {issue.severity}: {issue}"
+    if issue.severity == "info":
+        level = logging.INFO
+    elif issue.severity == "warning":
+        level = logging.WARNING
+    else:
+        level = logging.ERROR if strict else logging.WARNING
+    log.log(level, "%s", line)
+    return line
+
+
+def _log_dataset_issue(log: logging.Logger, issue: ValidationIssue, *, strict: bool) -> str:
+    line = f"{issue.severity}: {issue}"
     if issue.severity == "info":
         level = logging.INFO
     elif issue.severity == "warning":
@@ -124,6 +137,62 @@ def cmd_validate_projects(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate_dataset(args: argparse.Namespace) -> int:
+    log = _configure_logging(args.verbose)
+
+    logbook_file = Path(args.logbook_file).expanduser().resolve()
+    if not logbook_file.is_file():
+        log.error("Logbook file not found: %s", logbook_file)
+        return 2
+
+    project_base_dir = Path(args.project_base_dir).expanduser().resolve()
+    if not project_base_dir.is_dir():
+        log.error("Project base directory not found: %s", project_base_dir)
+        return 2
+
+    strict = not args.lenient
+
+    try:
+        report = DatasetValidator(logbook_file=logbook_file, project_base_dir=project_base_dir).validate(
+            level=args.level,
+            load_all=args.load_all,
+        )
+    except Exception:
+        log.exception("ERROR: unexpected failure while validating dataset")
+        return 1
+
+    report_lines = [_log_dataset_issue(log, issue, strict=strict) for issue in report.issues]
+
+    if args.report:
+        report_path = Path(args.report).expanduser().resolve()
+        text = ""
+        if report_lines:
+            text = "\n".join(report_lines) + "\n"
+        report_path.write_text(text, encoding="utf-8")
+        log.info("Wrote report: %s", report_path)
+
+    if strict and report.has_errors:
+        log.error("Dataset validation failed at level=%s.", args.level)
+        return 1
+
+    if strict:
+        log.info(
+            "Dataset validation succeeded at level=%s: entries=%d enriched=%d",
+            args.level,
+            len(report.value.entries),
+            len(report.value.enriched_entries),
+        )
+    elif report_lines:
+        log.warning(
+            "Lenient dataset validation completed at level=%s with %d issue(s).",
+            args.level,
+            len(report_lines),
+        )
+    else:
+        log.info("Lenient dataset validation succeeded at level=%s.", args.level)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="mouse-logbook", description="Validate and work with MOUSE logbook assets.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -151,6 +220,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     v.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv).")
     v.set_defaults(func=cmd_validate_projects)
+
+    d = sub.add_parser(
+        "validate-dataset",
+        help="Validate a logbook together with referenced proposal sheets and optional chemistry/material/X-ray layers.",
+    )
+    d.add_argument("logbook_file", help="Path to the logbook .xlsx file.")
+    d.add_argument("project_base_dir", help="Base directory that contains year subdirectories with proposal sheets.")
+    d.add_argument(
+        "--level",
+        choices=("core", "chemistry", "materials", "xray"),
+        default="core",
+        help="Validation depth. 'core' validates logbook/project/enrichment only; higher levels add optional domain checks.",
+    )
+    d.add_argument(
+        "--load-all",
+        action="store_true",
+        help="Validate all logbook rows, not only rows with converttoscript=1.",
+    )
+    d.add_argument(
+        "--lenient",
+        action="store_true",
+        help="Report validation problems without failing the command. Defaults to strict (fails on errors).",
+    )
+    d.add_argument(
+        "--report",
+        default=None,
+        help="Write a newline-separated report of issues to this path.",
+    )
+    d.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv).")
+    d.set_defaults(func=cmd_validate_dataset)
 
     return p
 

@@ -88,6 +88,12 @@ where `year` is the first 4 digits of `proposal_id`.
   * Uses optional `periodictable` and `xraydb` backends, but keeps that dependency boundary outside the core parser/enrichment path.
   * Uses `periodictable` for SLDs and `xraydb` for absorption, so external reference comparisons may show larger tolerance needs for absorption than for SLDs because the underlying tables differ.
 
+* `mouse_logbook.dataset_validation.DatasetValidator`
+
+  * Runs staged validation across the joined dataset instead of validating only isolated files.
+  * Supports `core`, `chemistry`, `materials`, and `xray` levels.
+  * Reuses the existing parser/enrichment/materials/X-ray layers rather than embedding duplicate validation logic.
+
 * `mouse_logbook.units`
 
   * Centralizes unit conversions with a shared `pint.UnitRegistry`.
@@ -137,15 +143,19 @@ A CLI entrypoint exists via `pyproject.toml` scripts:
 
 ```bash
 mouse-logbook validate-projects /path/to/projects
+mouse-logbook validate-dataset /path/to/logbook.xlsx /path/to/projects
 ```
 
 * Scans `{base}/{YYYY}/*.xlsx`, parses each file with strict schema validation.
+* Can also validate a logbook together with the referenced proposal sheets and optional chemistry/materials/X-ray layers.
 * Exit codes:
 
   * `0` all ok
   * `1` some invalid
   * `2` base directory missing
-* Optional flags: `--files ...`, `--report path`, `--lenient`, `-v/-vv`.
+* Optional flags now include:
+  * `validate-projects`: `--files ...`, `--report path`, `--lenient`, `-v/-vv`
+  * `validate-dataset`: `--level ...`, `--load-all`, `--report path`, `--lenient`, `-v/-vv`
 
 ### Tests included
 

@@ -22,6 +22,7 @@ Completed on the current branch:
 - Item 7 is implemented in `src/mouse_logbook/sample_metadata_chemistry.py` as the chemistry-validation layer on top of sample metadata.
 - Item 8 is implemented in `src/mouse_logbook/sample_metadata_materials.py` as the derived-material-properties layer on top of chemistry-validated sample metadata.
 - Item 9 is implemented in `src/mouse_logbook/sample_metadata_xray.py` as the X-ray property layer on top of chemistry-validated sample metadata.
+- Item 10 is implemented in `src/mouse_logbook/dataset_validation.py` and `src/mouse_logbook/cli.py` as the joined validation workflow and CLI entrypoint.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -40,6 +41,11 @@ Completed on the current branch:
   - composition derivation when density is unavailable but mass fractions exist
   - unavailable-result warnings when phase fractions are missing
   - enriched-entry wrapping
+- Dataset-validation tests now cover:
+  - staged core/chemistry/materials/X-ray validation
+  - enrichment consistency failures across logbook, project, sample, and sample-environment joins
+  - CLI exit codes for core and X-ray validation
+  - lenient reporting for extension-layer chemistry failures
 - X-ray extension tests now cover:
   - Cu/Mo precomputation
   - arbitrary-energy calculation
@@ -49,7 +55,7 @@ Completed on the current branch:
   - real backend unit conversion against `periodictable` and `xraydb`
 - Unit conversions are now centralized in `src/mouse_logbook/units.py` and backed by `pint` instead of inline conversion constants.
 - The optional `materials` extra now includes both `periodictable` and `xraydb`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `61 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `66 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -595,6 +601,15 @@ Verification:
 
 ### 10. Add proposal validation that spans logbook, proposal, and sample semantics
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/dataset_validation.py`
+- `src/mouse_logbook/cli.py`
+- `tests/unit/test_dataset_validation.py`
+- `tests/unit/test_cli_validate_dataset.py`
+
 Feature goal:
 
 - Validate not just individual files, but the joined dataset:
@@ -616,6 +631,33 @@ Acceptance criteria:
 - Validation can run in stages.
 - A user can request core-only validation or full materials validation.
 
+Implemented change:
+
+- Added `DatasetValidator` as a staged workflow that runs:
+  - logbook inspection
+  - referenced-project inspection
+  - enrichment consistency checks for samples and sample environments
+  - optional chemistry/materials/X-ray validation layers
+- Added validation levels:
+  - `core`
+  - `chemistry`
+  - `materials`
+  - `xray`
+- The validator preserves successfully parsed/enriched entries while still collecting issues across all stages.
+- Added a CLI command:
+  - `mouse-logbook validate-dataset LOGBOOK PROJECT_BASE_DIR`
+- The CLI supports:
+  - `--level`
+  - `--load-all`
+  - `--lenient`
+  - `--report`
+
+Verification:
+
+- `tests/unit/test_dataset_validation.py`
+- `tests/unit/test_cli_validate_dataset.py`
+- Full test suite and Ruff pass in the project virtualenv.
+
 ## Suggested Delivery Order
 
 1. Fix parser correctness issues in the current core package.
@@ -623,22 +665,16 @@ Acceptance criteria:
 3. Add independent logbook validation.
 4. Create the sample/material extension boundary.
 5. Implement chemistry validation with tests.
-6. Add an end-to-end validator that joins logbook, proposal, samples, and optional materials checks.
 
 ## Testing Gaps To Add
 
-- Joined validation workflow covers:
-  - core-only validation
-  - chemistry-enabled validation
-  - materials-enabled validation
-  - X-ray-enabled validation
-  - report generation across all layers
+- HDF5 writer/upsert compatibility tests once the downstream file-writing contract is introduced.
 
 ## Notes From This Review
 
 - The package design is directionally good: the core parsing/enrichment split is much cleaner than the legacy `ProjectReader`.
 - The main risk is not missing code volume; it is letting the new chemistry/X-ray work leak back into the core parser layer.
-- The next implementation step should be item 10: an end-to-end validator that can run core-only or with optional chemistry/materials/X-ray checks.
+- The next implementation step should be the HDF5 writer/upsert layer, using the new validated/enriched dataset outputs without re-embedding parsing logic there.
 
 ## Execution Note
 

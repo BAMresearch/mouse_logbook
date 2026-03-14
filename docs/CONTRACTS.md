@@ -51,6 +51,17 @@
 - Exposes absorption in `1/m` and scattering length densities in `1/m^2`.
 - Uses optional `periodictable` + `xraydb` backends behind the `materials` extra.
 
+## DatasetValidator
+
+- Validates the joined dataset rooted at one logbook file and one project base directory.
+- Always runs logbook inspection, referenced-project inspection, and enrichment consistency checks.
+- Supports staged levels:
+  - `core`
+  - `chemistry`
+  - `materials`
+  - `xray`
+- Returns `ValidationReport[DatasetValidationResult]` and preserves successfully validated entries at each stage even when some issues are present.
+
 ## units
 
 - Provides a shared `pint` registry plus conversion helpers for cross-module unit handling.
