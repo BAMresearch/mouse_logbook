@@ -80,6 +80,12 @@ where `year` is the first 4 digits of `proposal_id`.
   * Computes per-phase X-ray absorption coefficients and scattering length densities from chemistry-validated metadata.
   * Precomputes standard Cu (`8.04 keV`) and Mo (`17.4 keV`) values while still exposing arbitrary-energy calculations.
   * Uses optional `periodictable` and `xraydb` backends, but keeps that dependency boundary outside the core parser/enrichment path.
+  * Uses `periodictable` for SLDs and `xraydb` for absorption, so external reference comparisons may show larger tolerance needs for absorption than for SLDs because the underlying tables differ.
+
+* `mouse_logbook.units`
+
+  * Centralizes unit conversions with a shared `pint.UnitRegistry`.
+  * Currently handles the X-ray backend conversions (`keV -> eV`, `1/cm -> 1/m`, `1e-6/Å^2 -> 1/m^2`) so future materials work reuses one unit layer instead of adding new hard-coded factors.
 
 #### Enrichment (joining)
 

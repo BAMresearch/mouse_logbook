@@ -39,8 +39,9 @@ Completed on the current branch:
   - warnings when aggregate absorption cannot be derived
   - missing density / missing parsed formula failures
   - real backend unit conversion against `periodictable` and `xraydb`
+- Unit conversions are now centralized in `src/mouse_logbook/units.py` and backed by `pint` instead of inline conversion constants.
 - The optional `materials` extra now includes both `periodictable` and `xraydb`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `47 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `50 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -504,6 +505,10 @@ Implemented change:
 - The implementation converts library outputs into explicit SI-facing API fields:
   - absorption coefficient in `1/m`
   - real/imaginary SLD in `1/m^2`
+- Those conversions now go through a shared `pint`-backed unit layer in `src/mouse_logbook/units.py`.
+- Sanity-check tests now use a wider absorption tolerance than SLD tolerance because
+  `xraydb` and `periodictable` rely on different underlying tables; SLD reference
+  values align more tightly with the current backend than absorption references do.
 - Overall sample absorption is computed:
   - directly from `volume_fraction` when complete
   - from volume fractions derived from `mass_fraction` and density when needed
@@ -535,6 +540,8 @@ Important implementation note:
   - `periodictable.xsf.xray_sld(..., energy=...)` expects `keV`
   - `xraydb.material_mu(..., energy=...)` expects `eV`
 - The extension layer hides that mismatch and exposes a consistent `energy_kev` API.
+- Cross-library reference comparisons should also expect somewhat larger spread for
+  absorption coefficients than for SLDs because the tabulated source data differs.
 
 Verification:
 

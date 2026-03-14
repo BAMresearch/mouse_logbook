@@ -8,6 +8,7 @@ dependencies = [
   "attrs>=23.2.0",
   "pandas>=2.1",
   "openpyxl>=3.1",
+  "pint>=0.25",
 ]
 
 [project.optional-dependencies]

@@ -43,6 +43,14 @@
 - Exposes absorption in `1/m` and scattering length densities in `1/m^2`.
 - Uses optional `periodictable` + `xraydb` backends behind the `materials` extra.
 
+## units
+
+- Provides a shared `pint` registry plus conversion helpers for cross-module unit handling.
+- Current helpers cover the X-ray backend library mismatches:
+  - `keV -> eV`
+  - `1/cm -> 1/m`
+  - `1e-6/Å^2 -> 1/m^2`
+
 ## Logbook2MouseReader (legacy façade)
 
 - Provides iteration over **enriched entries**

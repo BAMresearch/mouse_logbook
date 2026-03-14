@@ -17,6 +17,13 @@ from mouse_logbook.sample_metadata_xray import (
     PeriodictableXrayBackend,
     SampleMetadataXrayCalculator,
 )
+from mouse_logbook.units import (
+    absorption_coefficient_cm_inv_to_m_inv,
+    absorption_coefficient_m_inv_to_cm_inv,
+    energy_kev_to_ev,
+    sld_m_inv2_to_micro_inverse_angstrom_sq,
+    sld_micro_inverse_angstrom_sq_to_m_inv2,
+)
 
 
 class FakeChemistryInterpreter:
@@ -35,6 +42,13 @@ class FakeXrayBackend:
         sld_real = scale * energy_kev
         sld_imag = density * energy_kev
         return mu, sld_real, sld_imag
+
+
+ABSORPTION_REFERENCE_TOLERANCE_REL = 0.11
+# Absorption sanity checks compare against broad reference values gathered from
+# external tools/sources. We keep a wider tolerance than for SLD because the
+# backend uses xraydb for absorption and periodictable for SLD, and those
+# libraries are backed by different tabulations.
 
 
 def _chemistry_project_with_volume_fractions():
@@ -285,9 +299,50 @@ def test_periodictable_xray_backend_matches_library_units() -> None:
         energy_kev=8.04,
     )
 
-    expected_mu_m_inv = float(xraydb.material_mu("H2O", density=1.0, energy=8040.0)) * 100.0
+    expected_mu_m_inv = absorption_coefficient_cm_inv_to_m_inv(
+        float(xraydb.material_mu("H2O", density=1.0, energy=energy_kev_to_ev(8.04)))
+    )
     expected_sld_real, expected_sld_imag = xray_sld("H2O", density=1.0, energy=8.04)
 
     assert mu_m_inv == pytest.approx(expected_mu_m_inv)
-    assert sld_real_m_inv2 == pytest.approx(float(expected_sld_real) * 1e14)
-    assert sld_imag_m_inv2 == pytest.approx(float(expected_sld_imag) * 1e14)
+    assert sld_real_m_inv2 == pytest.approx(sld_micro_inverse_angstrom_sq_to_m_inv2(float(expected_sld_real)))
+    assert sld_imag_m_inv2 == pytest.approx(sld_micro_inverse_angstrom_sq_to_m_inv2(float(expected_sld_imag)))
+
+
+def test_periodictable_xray_backend_water_cu_sanity_check() -> None:
+    mu_m_inv, sld_real_m_inv2, _ = PeriodictableXrayBackend().calculate_component(
+        formula_text="H2O",
+        density=0.998,
+        energy_kev=8.04,
+    )
+
+    assert absorption_coefficient_m_inv_to_cm_inv(mu_m_inv) == pytest.approx(
+        9.36, rel=ABSORPTION_REFERENCE_TOLERANCE_REL
+    )
+    assert sld_m_inv2_to_micro_inverse_angstrom_sq(sld_real_m_inv2) == pytest.approx(9.45, rel=0.02)
+
+
+def test_periodictable_xray_backend_zirconium_cu_sanity_check() -> None:
+    mu_m_inv, sld_real_m_inv2, _ = PeriodictableXrayBackend().calculate_component(
+        formula_text="Zr",
+        density=6.5,
+        energy_kev=8.04,
+    )
+
+    assert absorption_coefficient_m_inv_to_cm_inv(mu_m_inv) == pytest.approx(
+        838.0, rel=ABSORPTION_REFERENCE_TOLERANCE_REL
+    )
+    assert sld_m_inv2_to_micro_inverse_angstrom_sq(sld_real_m_inv2) == pytest.approx(48.2, rel=0.02)
+
+
+def test_periodictable_xray_backend_zirconium_mo_sanity_check() -> None:
+    mu_m_inv, sld_real_m_inv2, _ = PeriodictableXrayBackend().calculate_component(
+        formula_text="Zr",
+        density=6.5,
+        energy_kev=17.4,
+    )
+
+    assert absorption_coefficient_m_inv_to_cm_inv(mu_m_inv) == pytest.approx(
+        97.0, rel=ABSORPTION_REFERENCE_TOLERANCE_REL
+    )
+    assert sld_m_inv2_to_micro_inverse_angstrom_sq(sld_real_m_inv2) == pytest.approx(44.8, rel=0.02)

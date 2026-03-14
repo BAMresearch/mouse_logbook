@@ -13,6 +13,11 @@ from .sample_metadata_chemistry import (
     ChemistryValidatedProject,
     ChemistryValidatedSample,
 )
+from .units import (
+    absorption_coefficient_cm_inv_to_m_inv,
+    energy_kev_to_ev,
+    sld_micro_inverse_angstrom_sq_to_m_inv2,
+)
 from .validation import ValidationIssue, ValidationReport
 
 STANDARD_XRAY_ENERGIES_KEV: dict[str, float] = {
@@ -91,7 +96,17 @@ class XrayBackend(Protocol):
 
 @attrs.define(slots=True)
 class PeriodictableXrayBackend:
-    """X-ray property backend using xraydb and periodictable."""
+    """X-ray property backend using xraydb and periodictable.
+
+    Scattering length densities and absorption coefficients intentionally come
+    from different libraries:
+    - `periodictable.xsf.xray_sld(...)` for SLDs
+    - `xraydb.material_mu(...)` for absorption coefficients
+
+    That split matches the current package design, but it also means reference
+    values sourced from other tools may disagree more strongly for absorption
+    than for SLD because the underlying tabulations are not identical.
+    """
 
     def calculate_component(self, *, formula_text: str, density: float, energy_kev: float) -> tuple[float, float, float]:
         try:
@@ -104,13 +119,13 @@ class PeriodictableXrayBackend:
         except ModuleNotFoundError as e:
             raise RuntimeError("periodictable is not installed") from e
 
-        mu_cm_inv = xraydb.material_mu(formula_text, density=density, energy=energy_kev * 1000.0)
+        mu_cm_inv = xraydb.material_mu(formula_text, density=density, energy=energy_kev_to_ev(energy_kev))
         sld_real, sld_imag = xray_sld(formula_text, density=density, energy=energy_kev)
 
         return (
-            float(mu_cm_inv) * 100.0,
-            float(sld_real) * 1e14,
-            float(sld_imag) * 1e14,
+            absorption_coefficient_cm_inv_to_m_inv(float(mu_cm_inv)),
+            sld_micro_inverse_angstrom_sq_to_m_inv2(float(sld_real)),
+            sld_micro_inverse_angstrom_sq_to_m_inv2(float(sld_imag)),
         )
 
 
