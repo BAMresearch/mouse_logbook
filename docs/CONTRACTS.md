@@ -4,10 +4,11 @@
 
 - Input: a logbook `.xlsx`
 - Output: `list[LogbookEntry]`
+- `inspect_entries(load_all=...)` returns parsed entries plus structured validation issues
 - No side effects other than reading the Excel file.
 - Raises:
   - `FileNotFoundError` if file missing
-  - `LogbookFormatError` if required columns are missing
+  - `LogbookFormatError` if required columns are missing or row values are invalid
 
 ## ProjectRepository
 

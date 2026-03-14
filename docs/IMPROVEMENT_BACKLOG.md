@@ -17,6 +17,7 @@ Completed on the current branch:
 - Item 2 is implemented via structured validation reports in `src/mouse_logbook/validation.py`, `src/mouse_logbook/adapters/project_xlsx.py`, and `src/mouse_logbook/cli.py`.
 - Item 3 is implemented in `src/mouse_logbook/environment_repo.py` with a dedicated `SampleEnvironmentFormatError`.
 - Item 4 is implemented in `src/mouse_logbook/project_repo.py` with a dedicated `ProjectFileAmbiguityError`.
+- Item 5 is implemented in `src/mouse_logbook/io_excel.py` via explicit row parsing and `inspect_entries()`.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -25,7 +26,8 @@ Completed on the current branch:
 - Validation-report tests were added in `tests/unit/test_project_xlsx_parser_validation.py` and `tests/unit/test_cli_validate_projects.py`.
 - Sample-environment tests now cover unnamed leading columns, missing `sampos`, non-numeric motors, and missing sample-position lookups.
 - Project-repository tests now cover single-match, no-match, ambiguous-match, caching, and missing-sample behavior.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `23 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Logbook-reader tests now cover structural issues, row-level field validation, optional field validation, filtering, and issue collection.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `29 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -260,6 +262,13 @@ Verification:
 
 ### 5. Add row-level validation to the logbook parser
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/io_excel.py`
+- `tests/unit/test_io_excel.py`
+
 Current code:
 
 - `src/mouse_logbook/io_excel.py:58-84`
@@ -287,10 +296,23 @@ Proposed change:
   - numeric fields such as `matrix_fraction` and `sample_thickness`
 - Return row-index-aware messages.
 
+Implemented change:
+
+- Added explicit cell parsers for required text, optional text, integers, optional integers, numbers, timestamps, optional timestamps, and `converttoscript`.
+- Added `LogbookExcelReader.inspect_entries(...)` to return parsed entries plus structured validation issues.
+- Changed `LogbookExcelReader.read_entries(...)` to stay strict while raising `LogbookFormatError` with row-aware messages when any row is invalid.
+- Row validation now reports Excel row numbers and field names instead of leaking generic Python conversion exceptions.
+- Invalid rows are skipped in `inspect_entries(...)`, while valid rows are still returned so validation can inspect the whole sheet in one pass.
+
 Acceptance criteria:
 
 - Invalid logbook cells produce actionable errors that include row number and field name.
 - Logbook validation can be run independently from proposal validation.
+
+Verification:
+
+- `tests/unit/test_io_excel.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ## Sample/Chemistry Extension Roadmap
 

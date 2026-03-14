@@ -28,6 +28,8 @@ where `year` is the first 4 digits of `proposal_id`.
 * `mouse_logbook.io_excel.LogbookExcelReader`
 
   * Reads an Excel logbook file into immutable `mouse_logbook.models.LogbookEntry` objects.
+  * Performs row-level validation for core logbook fields and reports row/field-aware `LogbookFormatError`s in strict reads.
+  * Also exposes `inspect_entries()` for validation workflows that need parsed entries plus collected issues.
   * Handles the “additional parameters” key/val columns.
   * Filters by `converttoscript` unless `load_all=True`.
 
@@ -87,10 +89,12 @@ where `year` is the first 4 digits of `proposal_id`.
 Typed exceptions:
 
 * `LogbookFormatError`: logbook doesn’t match expected column schema
+  and also covers invalid row values during strict logbook reads
 * `ProjectNotFoundError`: proposal sheet can’t be located under conventions
 * `ProjectFileAmbiguityError`: more than one proposal sheet matches a proposal ID
 * `ProjectSheetFormatError`: proposal sheet content/schema invalid (most common)
 * `SampleNotFoundError`: sample referenced by logbook not found in project sheet
+* `SampleEnvironmentFormatError`: Sample Environments sheet schema/content invalid
 * `SampleEnvironmentNotFoundError`: `sampos` missing in Sample Environments
 
 ### CLI (for ingestion-time validation)
