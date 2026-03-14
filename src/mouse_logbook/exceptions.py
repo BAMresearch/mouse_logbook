@@ -13,6 +13,10 @@ class ProjectNotFoundError(LogbookError):
     """Raised when a project/proposal sheet could not be located."""
 
 
+class ProjectFileAmbiguityError(LogbookError):
+    """Raised when more than one project/proposal sheet matches a proposal ID."""
+
+
 class ProjectSheetFormatError(LogbookError):
     """Raised when a project/proposal sheet does not match the expected schema."""
 

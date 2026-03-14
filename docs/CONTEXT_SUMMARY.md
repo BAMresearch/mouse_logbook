@@ -88,6 +88,7 @@ Typed exceptions:
 
 * `LogbookFormatError`: logbook doesn’t match expected column schema
 * `ProjectNotFoundError`: proposal sheet can’t be located under conventions
+* `ProjectFileAmbiguityError`: more than one proposal sheet matches a proposal ID
 * `ProjectSheetFormatError`: proposal sheet content/schema invalid (most common)
 * `SampleNotFoundError`: sample referenced by logbook not found in project sheet
 * `SampleEnvironmentNotFoundError`: `sampos` missing in Sample Environments

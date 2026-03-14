@@ -6,7 +6,7 @@ from typing import Any
 
 import attrs
 
-from .exceptions import ProjectNotFoundError, SampleNotFoundError
+from .exceptions import ProjectFileAmbiguityError, ProjectNotFoundError, SampleNotFoundError
 
 
 @attrs.define(slots=True)
@@ -31,6 +31,10 @@ class ProjectFileLocator:
         if not matches:
             raise ProjectNotFoundError(
                 f"No project file found for {proposal_id!r} in {search_dir} (pattern {proposal_id}*.xlsx)"
+            )
+        if len(matches) > 1:
+            raise ProjectFileAmbiguityError(
+                f"Multiple project files found for {proposal_id!r} in {search_dir}: {[m.name for m in matches]!r}"
             )
         return matches[0]
 

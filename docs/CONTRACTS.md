@@ -12,6 +12,8 @@
 ## ProjectRepository
 
 - Locates a project file under `{base_dir}/{year}/{proposal_id}*.xlsx`
+- Raises `ProjectNotFoundError` if no file matches
+- Raises `ProjectFileAmbiguityError` if more than one file matches
 - Uses an injected parser `(Path) -> ProjectLike`
 - Caches parsed projects by `proposal_id`
 - `get_sample(proposal_id, sample_id)` expects `project.samples` to be a `dict[int, Any]`

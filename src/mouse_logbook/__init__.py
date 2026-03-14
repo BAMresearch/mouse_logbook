@@ -1,6 +1,7 @@
 from .exceptions import (
     LogbookError,
     LogbookFormatError,
+    ProjectFileAmbiguityError,
     ProjectNotFoundError,
     ProjectSheetFormatError,
     SampleEnvironmentFormatError,
@@ -17,6 +18,7 @@ __all__ = [
     "LogbookEntry",
     "LogbookError",
     "LogbookFormatError",
+    "ProjectFileAmbiguityError",
     "ProjectNotFoundError",
     "ProjectSheetFormatError",
     "SampleEnvironmentFormatError",

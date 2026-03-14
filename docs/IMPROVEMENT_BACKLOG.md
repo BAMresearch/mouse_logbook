@@ -16,6 +16,7 @@ Completed on the current branch:
 - Item 1 is implemented in `src/mouse_logbook/adapters/project_xlsx.py`.
 - Item 2 is implemented via structured validation reports in `src/mouse_logbook/validation.py`, `src/mouse_logbook/adapters/project_xlsx.py`, and `src/mouse_logbook/cli.py`.
 - Item 3 is implemented in `src/mouse_logbook/environment_repo.py` with a dedicated `SampleEnvironmentFormatError`.
+- Item 4 is implemented in `src/mouse_logbook/project_repo.py` with a dedicated `ProjectFileAmbiguityError`.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -23,7 +24,8 @@ Completed on the current branch:
 - Regression tests were added for both supported sample-block layouts in `tests/unit/test_project_xlsx_parser.py`.
 - Validation-report tests were added in `tests/unit/test_project_xlsx_parser_validation.py` and `tests/unit/test_cli_validate_projects.py`.
 - Sample-environment tests now cover unnamed leading columns, missing `sampos`, non-numeric motors, and missing sample-position lookups.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `17 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Project-repository tests now cover single-match, no-match, ambiguous-match, caching, and missing-sample behavior.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `23 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -206,6 +208,14 @@ Verification:
 
 ### 4. Fail on ambiguous project file matches
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/project_repo.py`
+- `src/mouse_logbook/exceptions.py`
+- `tests/unit/test_project_repo.py`
+
 Current code: `src/mouse_logbook/project_repo.py:30-35`
 
 Problem:
@@ -223,10 +233,30 @@ Proposed change:
 - Raise an explicit ambiguity error when more than one file matches.
 - If needed, add a configurable resolution strategy later.
 
+Implemented change:
+
+- Added `ProjectFileAmbiguityError` for multi-match proposal lookups.
+- Updated `ProjectFileLocator.find_project_file(...)` to:
+  - keep `ProjectNotFoundError` for zero matches
+  - raise `ProjectFileAmbiguityError` for multiple matches
+  - return the file only when the match is unique
+- Added repository tests for:
+  - unique match
+  - missing year directory
+  - missing project file
+  - multiple matching project files
+  - repository caching
+  - missing sample lookup
+
 Acceptance criteria:
 
 - Zero matches and multiple matches are both explicit error cases.
 - Enrichment never depends on filename sort order.
+
+Verification:
+
+- `tests/unit/test_project_repo.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 5. Add row-level validation to the logbook parser
 
