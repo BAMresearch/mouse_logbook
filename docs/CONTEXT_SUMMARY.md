@@ -59,6 +59,17 @@ where `year` is the first 4 digits of `proposal_id`.
   * Reads sheet `"Sample Environments"` from the logbook and returns motor positions per `sampos`.
   * Cached in memory.
 
+#### Optional sample-metadata extension
+
+* `mouse_logbook.sample_metadata.SampleMetadataBuilder`
+
+  * Maps the minimal parsed proposal-sheet `Sample`/`ProjectInfo` models into richer sample-metadata extension models.
+  * Keeps this richer domain separate from the core parser contract so chemistry and X-ray logic can build on top without polluting the core package.
+
+* `mouse_logbook.sample_metadata.SampleMetadataEnricher`
+
+  * Wraps `EnrichedLogbookEntry` values into a metadata-aware extension type while preserving the existing core enrichment pipeline.
+
 #### Enrichment (joining)
 
 * `mouse_logbook.services.LogbookEnricher`

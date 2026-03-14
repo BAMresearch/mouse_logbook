@@ -24,6 +24,11 @@
 - Reads sheet `Sample Environments` with a `sampos` column.
 - Returns a mapping of motor name -> float for a given `sampos`.
 
+## SampleMetadataBuilder
+
+- Maps parsed proposal-sheet `ProjectInfo` / `Sample` objects into richer sample-metadata extension models.
+- Returns `ValidationReport[...]` so extension-level issues can be collected without changing the core parser contract.
+
 ## Logbook2MouseReader (legacy façade)
 
 - Provides iteration over **enriched entries**

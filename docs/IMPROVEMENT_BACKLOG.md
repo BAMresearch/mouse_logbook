@@ -18,6 +18,7 @@ Completed on the current branch:
 - Item 3 is implemented in `src/mouse_logbook/environment_repo.py` with a dedicated `SampleEnvironmentFormatError`.
 - Item 4 is implemented in `src/mouse_logbook/project_repo.py` with a dedicated `ProjectFileAmbiguityError`.
 - Item 5 is implemented in `src/mouse_logbook/io_excel.py` via explicit row parsing and `inspect_entries()`.
+- Item 6 is implemented in `src/mouse_logbook/sample_metadata.py` as the initial sample-metadata extension boundary.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -27,7 +28,8 @@ Completed on the current branch:
 - Sample-environment tests now cover unnamed leading columns, missing `sampos`, non-numeric motors, and missing sample-position lookups.
 - Project-repository tests now cover single-match, no-match, ambiguous-match, caching, and missing-sample behavior.
 - Logbook-reader tests now cover structural issues, row-level field validation, optional field validation, filtering, and issue collection.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `29 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Sample-metadata extension tests now cover project/sample mapping, duplicate component IDs, inconsistent enriched entries, and aggregation.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `34 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -318,6 +320,13 @@ Verification:
 
 ### 6. Introduce a richer sample domain model
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/sample_metadata.py`
+- `tests/unit/test_sample_metadata.py`
+
 Current code:
 
 - `src/mouse_logbook/adapters/project_xlsx.py:49-81`
@@ -337,10 +346,27 @@ Proposed change:
 - Keep the core parser responsible for extracting raw proposal content.
 - Map raw parsed samples into richer material models only in the extension layer.
 
+Implemented change:
+
+- Added a dedicated extension module separate from core parsing/enrichment:
+  - `SampleMetadataComponent`
+  - `SampleMetadataSample`
+  - `SampleMetadataProject`
+  - `SampleMetadataEnrichedLogbookEntry`
+- Added `SampleMetadataBuilder` to map parsed proposal-sheet models into the richer extension types.
+- Added `SampleMetadataEnricher` to wrap existing `EnrichedLogbookEntry` values without changing the core pipeline.
+- Kept the extension dependency-light and chemistry-free for now, so chemistry and X-ray logic can build on this layer next.
+- Added structured validation at the extension boundary for duplicate component IDs while preserving the underlying component list.
+
 Acceptance criteria:
 
 - Core parsing remains dependency-light.
 - Sample/material semantics are explicit and testable.
+
+Verification:
+
+- `tests/unit/test_sample_metadata.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 7. Add chemistry validation of component descriptions
 
