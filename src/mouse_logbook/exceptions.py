@@ -24,3 +24,6 @@ class SampleNotFoundError(LogbookError):
 class SampleEnvironmentNotFoundError(LogbookError):
     """Raised when a sampos cannot be found in the Sample Environments sheet."""
 
+
+class SampleEnvironmentFormatError(LogbookError):
+    """Raised when the Sample Environments sheet does not match the expected schema."""

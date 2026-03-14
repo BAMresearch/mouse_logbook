@@ -15,13 +15,15 @@ Completed on the current branch:
 
 - Item 1 is implemented in `src/mouse_logbook/adapters/project_xlsx.py`.
 - Item 2 is implemented via structured validation reports in `src/mouse_logbook/validation.py`, `src/mouse_logbook/adapters/project_xlsx.py`, and `src/mouse_logbook/cli.py`.
+- Item 3 is implemented in `src/mouse_logbook/environment_repo.py` with a dedicated `SampleEnvironmentFormatError`.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
 - `mouse-logbook validate-projects --lenient` now reports validation problems and can write them to `--report` without returning a failing exit code for schema issues.
 - Regression tests were added for both supported sample-block layouts in `tests/unit/test_project_xlsx_parser.py`.
 - Validation-report tests were added in `tests/unit/test_project_xlsx_parser_validation.py` and `tests/unit/test_cli_validate_projects.py`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `13 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Sample-environment tests now cover unnamed leading columns, missing `sampos`, non-numeric motors, and missing sample-position lookups.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `17 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -153,6 +155,14 @@ Verification:
 
 ### 3. Harden the sample-environment parser against layout drift
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/environment_repo.py`
+- `src/mouse_logbook/exceptions.py`
+- `tests/unit/test_environment_repo.py`
+
 Current code: `src/mouse_logbook/environment_repo.py:33-49`
 
 Problem:
@@ -173,10 +183,26 @@ Proposed change:
 - Ignore unnamed columns by name, not by position.
 - Raise a typed format error when `sampos` is missing or motor values are non-numeric.
 
+Implemented change:
+
+- Removed the positional `df.iloc[:, 1:]` assumption entirely.
+- Added explicit column normalization and ignored unnamed Excel columns by name.
+- Added `SampleEnvironmentFormatError` for malformed sample-environment sheets.
+- Validated that:
+  - `sampos` exists
+  - normalized column names are not ambiguous
+  - motor values are numeric when present
+- Kept lookup errors separate via the existing `SampleEnvironmentNotFoundError`.
+
 Acceptance criteria:
 
 - The parser works with and without a leading unnamed Excel column.
 - Misformatted sample-environment sheets fail with actionable messages.
+
+Verification:
+
+- `tests/unit/test_environment_repo.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 4. Fail on ambiguous project file matches
 

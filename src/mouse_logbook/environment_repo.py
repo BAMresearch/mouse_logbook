@@ -2,11 +2,32 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import attrs
 import pandas as pd
 
-from .exceptions import SampleEnvironmentNotFoundError
+from .exceptions import SampleEnvironmentFormatError, SampleEnvironmentNotFoundError
+
+
+def _is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except TypeError:
+        pass
+    return isinstance(value, str) and not value.strip()
+
+
+def _norm_col_name(value: Any) -> str:
+    return str(value).strip().lower()
+
+
+def _is_ignored_column_name(value: Any) -> bool:
+    name = _norm_col_name(value)
+    return not name or name.startswith("unnamed:")
 
 
 @attrs.define(slots=True)
@@ -37,15 +58,40 @@ class SampleEnvironmentRepository:
             engine="openpyxl",
         )
 
-        df = df.iloc[:, 1:]
-        df = df.dropna(subset=["sampos"])
+        normalized_columns: dict[str, str] = {}
+        for column in df.columns:
+            if _is_ignored_column_name(column):
+                continue
+            normalized = _norm_col_name(column)
+            if normalized in normalized_columns:
+                raise SampleEnvironmentFormatError(
+                    f"Duplicate Sample Environments column after normalization: {column!r} and {normalized_columns[normalized]!r}"
+                )
+            normalized_columns[normalized] = str(column)
 
-        motor_names = list(df.columns[1:])
+        sampos_column = normalized_columns.get("sampos")
+        if sampos_column is None:
+            raise SampleEnvironmentFormatError("Sample Environments missing required column 'sampos'")
+
+        df = df[[column for column in normalized_columns.values()]]
+        df = df[~df[sampos_column].apply(_is_blank)]
+
+        motor_names = [column for normalized, column in normalized_columns.items() if normalized != "sampos"]
         cache: dict[str, dict[str, float]] = {}
 
         for _, row in df.iterrows():
-            sampos = str(row["sampos"])
-            motor_values = {str(m): float(row[m]) for m in motor_names if m in row and pd.notna(row[m])}
+            sampos = str(row[sampos_column]).strip()
+            motor_values: dict[str, float] = {}
+            for motor_name in motor_names:
+                value = row[motor_name]
+                if _is_blank(value):
+                    continue
+                try:
+                    motor_values[str(motor_name)] = float(value)
+                except (TypeError, ValueError) as e:
+                    raise SampleEnvironmentFormatError(
+                        f"Sample Environments sampos {sampos!r} has non-numeric value for motor {motor_name!r}: {value!r}"
+                    ) from e
             cache[sampos] = motor_values
 
         self._cache = cache
