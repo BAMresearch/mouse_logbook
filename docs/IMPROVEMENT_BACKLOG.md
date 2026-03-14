@@ -20,6 +20,7 @@ Completed on the current branch:
 - Item 5 is implemented in `src/mouse_logbook/io_excel.py` via explicit row parsing and `inspect_entries()`.
 - Item 6 is implemented in `src/mouse_logbook/sample_metadata.py` as the initial sample-metadata extension boundary.
 - Item 7 is implemented in `src/mouse_logbook/sample_metadata_chemistry.py` as the chemistry-validation layer on top of sample metadata.
+- Item 8 is implemented in `src/mouse_logbook/sample_metadata_materials.py` as the derived-material-properties layer on top of chemistry-validated sample metadata.
 - Item 9 is implemented in `src/mouse_logbook/sample_metadata_xray.py` as the X-ray property layer on top of chemistry-validated sample metadata.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
@@ -32,6 +33,13 @@ Completed on the current branch:
 - Logbook-reader tests now cover structural issues, row-level field validation, optional field validation, filtering, and issue collection.
 - Sample-metadata extension tests now cover project/sample mapping, duplicate component IDs, inconsistent enriched entries, and aggregation.
 - Chemistry-validation tests now cover valid formulas, invalid formulas, missing descriptions, interpreter failures, and enriched-entry wrapping.
+- Materials-derivation tests now cover:
+  - formula material characterization
+  - apparent-density estimates from volume fractions
+  - apparent-density estimates from mass fractions
+  - composition derivation when density is unavailable but mass fractions exist
+  - unavailable-result warnings when phase fractions are missing
+  - enriched-entry wrapping
 - X-ray extension tests now cover:
   - Cu/Mo precomputation
   - arbitrary-energy calculation
@@ -41,7 +49,7 @@ Completed on the current branch:
   - real backend unit conversion against `periodictable` and `xraydb`
 - Unit conversions are now centralized in `src/mouse_logbook/units.py` and backed by `pint` instead of inline conversion constants.
 - The optional `materials` extra now includes both `periodictable` and `xraydb`.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `50 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `61 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -439,25 +447,62 @@ Verification:
 
 ### 8. Add derived sample composition and density estimates
 
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/sample_metadata_materials.py`
+- `tests/unit/test_sample_metadata_materials.py`
+
 Feature goal:
 
 - Derive an overall sample composition from the component list.
 - Estimate bulk density when enough information is available.
-- Distinguish user-entered values from derived values.
+- Distinguish experimentally determined values from derived values.
 
 Proposed change:
 
 - Compute composition/density from validated components only.
 - Record provenance for each result:
-  - `entered`
+  - `experimentally_determined`
   - `estimated_from_volume_fraction`
   - `estimated_from_mass_fraction`
   - `unavailable`
+- Track density kind explicitly:
+  - `apparent_density`
+  - `true_density`
+  - `skeletal_density`
 
 Acceptance criteria:
 
 - Missing inputs do not cause silent partial failure.
 - Derived values are tagged with provenance and confidence notes.
+
+Implemented change:
+
+- Added explicit materials result models for:
+  - formula-level material properties
+  - density estimates with provenance and density kind
+  - sample-level elemental composition estimates
+- Added `SampleMetadataMaterialsCalculator` with component/sample/project/enriched-entry wrappers.
+- Component densities supplied by the proposal sheet are now represented as:
+  - provenance: `experimentally_determined`
+  - density kind: `true_density` by default when the sheet does not say otherwise
+- Sample densities derived from phase fractions are represented as:
+  - density kind: `apparent_density`
+  - provenance: `estimated_from_volume_fraction` or `estimated_from_mass_fraction`
+- `skeletal_density` is part of the model surface for future use, but is not inferred from the current proposal-sheet schema.
+- Derived sample composition now exposes:
+  - overall elemental mass fractions
+  - overall elemental atom fractions
+  - explicit provenance based on whether the estimate came from mass-fraction or volume-fraction inputs
+- When only direct mass fractions are available, the layer can still derive overall composition even if density is missing.
+- When the inputs are insufficient, the layer returns structured warnings and explicit `unavailable` provenance instead of silent partial results.
+
+Verification:
+
+- `tests/unit/test_sample_metadata_materials.py`
+- Full test suite and Ruff pass in the project virtualenv.
 
 ### 9. Add X-ray property calculations with explicit SI units
 
@@ -578,15 +623,14 @@ Acceptance criteria:
 3. Add independent logbook validation.
 4. Create the sample/material extension boundary.
 5. Implement chemistry validation with tests.
-6. Implement density/composition derivation.
-7. Add an end-to-end validator that joins logbook, proposal, samples, and optional materials checks.
+6. Add an end-to-end validator that joins logbook, proposal, samples, and optional materials checks.
 
 ## Testing Gaps To Add
 
-- Derived density/composition results are provenance-tagged.
 - Joined validation workflow covers:
   - core-only validation
   - chemistry-enabled validation
+  - materials-enabled validation
   - X-ray-enabled validation
   - report generation across all layers
 
@@ -594,7 +638,7 @@ Acceptance criteria:
 
 - The package design is directionally good: the core parsing/enrichment split is much cleaner than the legacy `ProjectReader`.
 - The main risk is not missing code volume; it is letting the new chemistry/X-ray work leak back into the core parser layer.
-- The next implementation step should be item 8: derived sample composition and density estimates, followed by item 10 for end-to-end validation.
+- The next implementation step should be item 10: an end-to-end validator that can run core-only or with optional chemistry/materials/X-ray checks.
 
 ## Execution Note
 

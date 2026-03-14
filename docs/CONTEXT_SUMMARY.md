@@ -75,6 +75,12 @@ where `year` is the first 4 digits of `proposal_id`.
   * Validates chemistry descriptions for sample-metadata components without pushing chemistry dependencies into the core parser layer.
   * Supports a pluggable interpreter so tests can use fakes and real runs can use `periodictable`.
 
+* `mouse_logbook.sample_metadata_materials.SampleMetadataMaterialsCalculator`
+
+  * Derives sample-level material properties from chemistry-validated components.
+  * Treats component densities from the proposal sheet as `true_density` with `experimentally_determined` provenance unless a richer schema says otherwise.
+  * Derives sample density as `apparent_density` from phase fractions when possible, and exposes elemental mass/atom fractions with explicit provenance.
+
 * `mouse_logbook.sample_metadata_xray.SampleMetadataXrayCalculator`
 
   * Computes per-phase X-ray absorption coefficients and scattering length densities from chemistry-validated metadata.

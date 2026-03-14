@@ -35,6 +35,14 @@
 - Uses a pluggable interpreter interface so the chemistry backend is optional and replaceable.
 - Returns `ValidationReport[...]` and preserves the original component description alongside parsed formula metadata.
 
+## SampleMetadataMaterialsCalculator
+
+- Derives sample-level material properties from chemistry-validated sample metadata.
+- Treats component densities supplied by the proposal sheet as `true_density` with `experimentally_determined` provenance unless the schema later becomes more explicit.
+- Derives sample density as `apparent_density` from complete phase-fraction inputs plus component densities.
+- Can derive overall elemental mass and atom fractions from validated formulas and phase mass fractions.
+- Returns `ValidationReport[...]` and leaves unavailable results explicit with structured warnings.
+
 ## SampleMetadataXrayCalculator
 
 - Computes X-ray properties from chemistry-validated sample metadata, not from raw proposal parsing.
