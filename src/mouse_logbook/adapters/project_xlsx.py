@@ -28,7 +28,23 @@ def _norm_key(s: Any) -> str:
 
 
 def _is_blank(v: Any) -> bool:
-    return v is None or (isinstance(v, float) and pd.isna(v)) or (isinstance(v, str) and not v.strip())
+    if v is None:
+        return True
+    try:
+        if pd.isna(v):
+            return True
+    except TypeError:
+        pass
+    return isinstance(v, str) and not v.strip()
+
+
+def _as_text(v: Any) -> str:
+    return "" if _is_blank(v) else str(v).strip()
+
+
+def _as_optional_text(v: Any) -> str | None:
+    s = _as_text(v)
+    return s or None
 
 
 def _as_float(v: Any) -> float | None:
@@ -116,11 +132,11 @@ class ProjectXlsxParser:
         info = self._read_project_info(file_path)
         proposal_id = _normalize_proposal_id(info.get("proposal")) or _normalize_proposal_id(file_path.stem)
 
-        name = str(info.get("name", "")).strip()
-        organisation = str(info.get("organisation", "")).strip()
-        email = str(info.get("email", "")).strip()
-        title = str(info.get("title", "")).strip()
-        description = str(info.get("what", "")).strip()
+        name = _as_text(info.get("name", ""))
+        organisation = _as_text(info.get("organisation", ""))
+        email = _as_text(info.get("email", ""))
+        title = _as_text(info.get("title", ""))
+        description = _as_text(info.get("what", ""))
 
         self._validate_project_info(
             proposal_id=proposal_id,
@@ -308,22 +324,21 @@ class ProjectXlsxParser:
                 if sid in samples:
                     raise ProjectSheetFormatError(f"{file_path.name}: duplicate sampleId={sid}")
                 current_id = sid
-                current_name = str(row.get(c_sample_name, "")).strip()
-                continue
+                current_name = _as_text(row.get(c_sample_name, ""))
 
-            # component rows belong to current sample
             if current_id is None:
                 # ignore leading/stray rows before first sample
                 continue
 
-            comp_id = str(row.get(c_comp_id, "")).strip()
-            composition = str(row.get(c_comp, "")).strip()
+            # Component data may live either on the sample-start row or on continuation rows.
+            comp_id = _as_text(row.get(c_comp_id, ""))
+            composition = _as_text(row.get(c_comp, ""))
             density = _as_float(row.get(c_density, None))
             vol_frac = _as_float(row.get(c_vf, None))
             mass_frac = _as_float(row.get(c_mf, None))
-            connection = str(row.get(c_conn, "")).strip() if c_conn else None
-            connected_to = str(row.get(c_conn_to, "")).strip() if c_conn_to else None
-            component_name = str(row.get(c_comp_name, "")).strip() if c_comp_name else None
+            connection = _as_optional_text(row.get(c_conn, "")) if c_conn else None
+            connected_to = _as_optional_text(row.get(c_conn_to, "")) if c_conn_to else None
+            component_name = _as_optional_text(row.get(c_comp_name, "")) if c_comp_name else None
 
             # if the row is effectively blank, skip
             if _is_blank(comp_id) and _is_blank(composition) and density is None and vol_frac is None and mass_frac is None:
@@ -336,9 +351,9 @@ class ProjectXlsxParser:
                     density=density,
                     vol_frac=vol_frac,
                     mass_frac=mass_frac,
-                    connection=connection or None,
-                    connected_to=connected_to or None,
-                    component_name=component_name or None,
+                    connection=connection,
+                    connected_to=connected_to,
+                    component_name=component_name,
                 )
             )
 
