@@ -13,6 +13,9 @@ and optionally enrich them with project/sample and sample-environment metadata.
 - `services.LogbookEnricher`: join entries with project/sample/environment
 - `legacy.Logbook2MouseReader`: compatibility façade to keep downstream code stable
 
+For the planned internal subpackage boundaries and future package-split preparation,
+see `docs/REFACTOR_PLAN.md`.
+
 ## Validation philosophy
 
 Project/proposal sheets are user-authored and are a common source of errors.

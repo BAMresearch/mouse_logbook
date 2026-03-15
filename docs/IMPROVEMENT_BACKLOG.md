@@ -6,6 +6,7 @@ Reviewed:
 
 - Current `mouse_logbook` package in this repository
 - Legacy reader at `/Users/bpauw/Code/logbook2mouse/logbook2mouse/project_reader.py`
+- Architectural refactor target captured in `docs/REFACTOR_PLAN.md`
 
 This backlog separates confirmed implementation issues from feature work. The goal is to make the package reliable first, then add chemistry-aware sample validation and derived material/X-ray properties in a clean extension layer.
 
