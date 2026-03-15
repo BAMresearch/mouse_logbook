@@ -10,6 +10,7 @@ from .exceptions import (
 )
 from .legacy import Logbook2MouseEntry, Logbook2MouseReader
 from .models import EnrichedLogbookEntry, LogbookEntry
+from .nexus_export import NexusMetadataExportPayload, NexusMetadataExportService
 from .nexus_metadata import NexusMetadataError, NexusMetadataUpserter
 
 __all__ = [
@@ -20,6 +21,8 @@ __all__ = [
     "LogbookError",
     "LogbookFormatError",
     "NexusMetadataError",
+    "NexusMetadataExportPayload",
+    "NexusMetadataExportService",
     "NexusMetadataUpserter",
     "ProjectFileAmbiguityError",
     "ProjectNotFoundError",

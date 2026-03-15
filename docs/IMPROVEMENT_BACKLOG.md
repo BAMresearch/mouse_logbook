@@ -24,6 +24,7 @@ Completed on the current branch:
 - Item 9 is implemented in `src/mouse_logbook/sample_metadata_xray.py` as the X-ray property layer on top of chemistry-validated sample metadata.
 - Item 10 is implemented in `src/mouse_logbook/dataset_validation.py` and `src/mouse_logbook/cli.py` as the joined validation workflow and CLI entrypoint.
 - Item 11 is implemented in `src/mouse_logbook/nexus_metadata.py` as the compatibility NeXus/HDF5 metadata upsert layer.
+- Item 12 is implemented in `src/mouse_logbook/nexus_export.py` and `src/mouse_logbook/cli.py` as the user-facing single-row NeXus export workflow and CLI command.
 - The proposal parser now preserves component data when it appears on the same row as `sampleId`.
 - Blank Excel cells are now treated as blank consistently instead of leaking through as string values such as `"nan"`.
 - The project parser now exposes collected validation issues without depending on `strict` mode to surface them.
@@ -53,6 +54,12 @@ Completed on the current branch:
   - explicit nonstandard-energy overrides
   - preservation of externally managed background-file placeholders
   - rejection of mismatched material/X-ray entry pairs
+- User-facing NeXus export tests now cover:
+  - single-row export by `ymd + batchnum`
+  - refusal to guess when multiple eligible logbook rows exist
+  - refusal to accept only one half of the selection key
+  - custom-energy export through the new CLI/service layer
+  - writing into an existing `.nxs` output file
 - X-ray extension tests now cover:
   - Cu/Mo precomputation
   - arbitrary-energy calculation
@@ -63,7 +70,7 @@ Completed on the current branch:
 - Unit conversions are now centralized in `src/mouse_logbook/units.py` and backed by `pint` instead of inline conversion constants.
 - The optional `materials` extra now includes both `periodictable` and `xraydb`.
 - The optional `hdf5` extra now includes `h5py`, and `h5py` is also listed in the `dev` extra for test runs.
-- Current verification run: `.venv/bin/python -m pytest tests` -> `70 passed`; `.venv/bin/ruff check src tests` -> passed.
+- Current verification run: `.venv/bin/python -m pytest tests` -> `78 passed`; `.venv/bin/ruff check src tests` -> passed.
 
 ## Recommendation
 
@@ -683,6 +690,41 @@ Verification:
 - The package design is directionally good: the core parsing/enrichment split is much cleaner than the legacy `ProjectReader`.
 - The main risk is not missing code volume; it is letting the new chemistry/X-ray work leak back into the core parser layer.
 - The next implementation step should be wiring the HDF5 writer/upsert layer into the ingestion runtime once the external file-writing call site is settled.
+
+### 12. Make the NeXus metadata writer user-facing
+
+Status: completed
+
+Implemented in:
+
+- `src/mouse_logbook/nexus_export.py`
+- `src/mouse_logbook/cli.py`
+- `tests/unit/test_nexus_export.py`
+- `tests/unit/test_cli_write_nexus_metadata.py`
+
+Problem:
+
+- The HDF5 writer existed only as a library helper, which left no supported command-line path for operators to create or update a `.nxs` file from the validated logbook/proposal/sample metadata.
+- A user-facing export path also needs a stable measurement-selection rule so the tool does not silently write the wrong measurement when one logbook contains multiple rows.
+
+Implemented change:
+
+- Added `NexusMetadataExportService` to orchestrate one selected logbook entry through:
+  - selection by `ymd + batchnum`
+  - project lookup
+  - sample-environment resolution
+  - chemistry/material/X-ray derivation
+  - final NeXus metadata upsert
+- Added CLI command:
+  - `mouse-logbook write-nexus-metadata LOGBOOK PROJECT_BASE_DIR OUTPUT_FILE`
+- The command supports:
+  - `--ymd` plus `--batch-num` to select one measurement series explicitly
+  - `--load-all` to include rows with `converttoscript=0`
+  - `--source-key` to force a specific precomputed X-ray source label
+  - `--energy-kev` to compute a custom-energy export
+  - `--report` for issue output
+- When multiple eligible rows exist, the command now fails explicitly instead of guessing.
+- The command also fails when only one half of the `ymd + batchnum` identifier is provided.
 
 ### 11. Add a compatibility NeXus/HDF5 metadata upsert layer
 

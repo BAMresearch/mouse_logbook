@@ -109,6 +109,14 @@ where `year` is the first 4 digits of `proposal_id`.
     * or `sampos` inference (`Cu ...` / `Mo ...`) for the precomputed standard energies
   * Preserves externally managed background-file path datasets by default while still updating the identifiers derived from the logbook.
 
+* `mouse_logbook.nexus_export.NexusMetadataExportService`
+
+  * Provides the user-facing single-measurement export path on top of the validated pipeline.
+  * Selects exactly one measurement series by `ymd + batchnum`, resolves its proposal/sample/environment context, runs chemistry/material/X-ray derivation for that entry, and then writes the result into a new or existing `.nxs` file.
+  * Supports both:
+    * standard Cu/Mo source selection inferred from `sampos`
+    * explicit custom-energy export via `energy_kev`
+
 * `mouse_logbook.units`
 
   * Centralizes unit conversions with a shared `pint.UnitRegistry`.
@@ -159,6 +167,7 @@ A CLI entrypoint exists via `pyproject.toml` scripts:
 ```bash
 mouse-logbook validate-projects /path/to/projects
 mouse-logbook validate-dataset /path/to/logbook.xlsx /path/to/projects
+mouse-logbook write-nexus-metadata /path/to/logbook.xlsx /path/to/projects /path/to/output.nxs --ymd 20260303 --batch-num 4
 ```
 
 * Scans `{base}/{YYYY}/*.xlsx`, parses each file with strict schema validation.
@@ -171,11 +180,13 @@ mouse-logbook validate-dataset /path/to/logbook.xlsx /path/to/projects
 * Optional flags now include:
   * `validate-projects`: `--files ...`, `--report path`, `--lenient`, `-v/-vv`
   * `validate-dataset`: `--level ...`, `--load-all`, `--report path`, `--lenient`, `-v/-vv`
+  * `write-nexus-metadata`: `--ymd ...`, `--batch-num ...`, `--load-all`, `--source-key ...`, `--energy-kev ...`, `--report path`, `-v/-vv`
 
 ### Tests included
 
 * Unit tests for model behavior, parsing errors, and CLI exit codes.
 * Unit tests for NeXus/HDF5 metadata writing against the current compatibility layout.
+* Unit tests for user-facing single-row NeXus export and its CLI command.
 * Functional test uses anonymized example files under `tests/data/`.
 
 ### Known limitation / migration note

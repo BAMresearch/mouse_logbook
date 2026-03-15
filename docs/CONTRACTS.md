@@ -82,6 +82,25 @@
   - inferred from `sampos` (`Cu ...` -> `cu_ka`, `Mo ...` -> `mo_ka`)
 - Preserves existing `background_file` and `dispersed_background_file` dataset values by default because those paths are managed elsewhere.
 
+## NexusMetadataExportService
+
+- Orchestrates a single-row export from:
+  - one logbook `.xlsx`
+  - one project base directory
+  - one output `.nxs` file
+- Selects one logbook entry by:
+  - explicit `ymd + batch_num`
+  - or the sole eligible row when there is exactly one
+- Fails with a validation error when:
+  - only one half of the identifier was provided
+  - multiple eligible rows exist and no `ymd + batch_num` selector was provided
+  - more than one valid row matches the same `ymd + batch_num`
+- Runs only the selected row through project lookup, sample-environment resolution, chemistry validation, materials derivation, X-ray derivation, and final NeXus upsert.
+- Supports:
+  - standard Cu/Mo output inferred from `sampos`
+  - explicit `source_key`
+  - explicit `energy_kev` for custom-energy exports
+
 ## units
 
 - Provides a shared `pint` registry plus conversion helpers for cross-module unit handling.

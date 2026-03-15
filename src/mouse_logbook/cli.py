@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .adapters.project_xlsx import ProjectXlsxParser
 from .dataset_validation import DatasetValidator
+from .nexus_export import NexusMetadataExportService
 from .validation import ValidationIssue
 
 
@@ -193,6 +194,62 @@ def cmd_validate_dataset(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_write_nexus_metadata(args: argparse.Namespace) -> int:
+    log = _configure_logging(args.verbose)
+
+    logbook_file = Path(args.logbook_file).expanduser().resolve()
+    if not logbook_file.is_file():
+        log.error("Logbook file not found: %s", logbook_file)
+        return 2
+
+    project_base_dir = Path(args.project_base_dir).expanduser().resolve()
+    if not project_base_dir.is_dir():
+        log.error("Project base directory not found: %s", project_base_dir)
+        return 2
+
+    output_file = Path(args.output_file).expanduser().resolve()
+
+    try:
+        report = NexusMetadataExportService(
+            logbook_file=logbook_file,
+            project_base_dir=project_base_dir,
+        ).write_entry(
+            output_file=output_file,
+            ymd=args.ymd,
+            batch_num=args.batch_num,
+            load_all=args.load_all,
+            source_key=args.source_key,
+            energy_kev=args.energy_kev,
+        )
+    except Exception:
+        log.exception("ERROR: unexpected failure while writing NeXus metadata")
+        return 1
+
+    report_lines = [_log_dataset_issue(log, issue, strict=True) for issue in report.issues]
+
+    if args.report:
+        report_path = Path(args.report).expanduser().resolve()
+        text = ""
+        if report_lines:
+            text = "\n".join(report_lines) + "\n"
+        report_path.write_text(text, encoding="utf-8")
+        log.info("Wrote report: %s", report_path)
+
+    if report.has_errors or report.value is None:
+        log.error("NeXus metadata write failed.")
+        return 1
+
+    log.info(
+        "Wrote NeXus metadata: %s (proposal_id=%s sampleId=%s source=%s energy=%.4g keV)",
+        report.value.output_file,
+        report.value.entry.proposal_id,
+        report.value.entry.sample_id,
+        report.value.source_key,
+        report.value.energy_kev,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="mouse-logbook", description="Validate and work with MOUSE logbook assets.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -250,6 +307,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     d.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv).")
     d.set_defaults(func=cmd_validate_dataset)
+
+    w = sub.add_parser(
+        "write-nexus-metadata",
+        help="Write validated proposal/sample/logbook metadata into a new or existing NeXus/HDF5 file.",
+    )
+    w.add_argument("logbook_file", help="Path to the logbook .xlsx file.")
+    w.add_argument("project_base_dir", help="Base directory that contains year subdirectories with proposal sheets.")
+    w.add_argument("output_file", help="Path to the target .nxs/.h5 file to create or update.")
+    w.add_argument(
+        "--ymd",
+        default=None,
+        help="Logbook date code in YYYYMMDD form used together with --batch-num to select one measurement series.",
+    )
+    w.add_argument(
+        "--batch-num",
+        type=int,
+        default=None,
+        help="Logbook batch number used together with --ymd to select one measurement series.",
+    )
+    w.add_argument(
+        "--load-all",
+        action="store_true",
+        help="Allow selecting from all logbook rows, not only rows with converttoscript=1.",
+    )
+    w.add_argument(
+        "--source-key",
+        default=None,
+        help="Override the X-ray source key to write (for example: cu_ka, mo_ka, or a custom label).",
+    )
+    w.add_argument(
+        "--energy-kev",
+        type=float,
+        default=None,
+        help="Compute and write X-ray metadata for this explicit energy instead of the standard Cu/Mo precompute.",
+    )
+    w.add_argument(
+        "--report",
+        default=None,
+        help="Write a newline-separated report of export issues to this path.",
+    )
+    w.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (-v, -vv).")
+    w.set_defaults(func=cmd_write_nexus_metadata)
 
     return p
 
