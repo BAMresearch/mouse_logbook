@@ -67,6 +67,10 @@ def _error(location: str, message: str) -> ValidationIssue:
     return ValidationIssue(severity="error", location=location, message=message)
 
 
+def _warning(location: str, message: str) -> ValidationIssue:
+    return ValidationIssue(severity="warning", location=location, message=message)
+
+
 @attrs.frozen(kw_only=True, slots=True)
 class SampleComponent:
     component_id: str
@@ -274,6 +278,9 @@ class ProjectXlsxParser:
         def append_sample_issue(message: str) -> None:
             issues.append(_error("Sample_Info", message))
 
+        def append_sample_warning(message: str) -> None:
+            issues.append(_warning("Sample_Info", message))
+
         def component_float(field_name: str, value: Any, *, sample_id: int | None, component_id: str) -> float | None:
             try:
                 return _as_float(value)
@@ -284,6 +291,40 @@ class ProjectXlsxParser:
                     f"sampleId={sample_label}: component {component_label!r} invalid {field_name}: {e}"
                 )
                 return None
+
+        def normalize_component_fractions(
+            field_name: str,
+            attribute_name: str,
+            sample_components: list[SampleComponent],
+        ) -> list[SampleComponent]:
+            provided = [
+                (index, getattr(component, attribute_name))
+                for index, component in enumerate(sample_components)
+                if getattr(component, attribute_name) is not None
+            ]
+            if len(provided) != len(sample_components):
+                return sample_components
+
+            values = [float(value) for _, value in provided]
+            if any(not (0.0 <= value <= 1.0) for value in values):
+                return sample_components
+
+            total = sum(values)
+            if total <= 0:
+                append_sample_issue(f"sampleId={current_id}: {field_name} sums to {total:.6f}, expected > 0")
+                return sample_components
+
+            if abs(total - 1.0) <= 1e-3:
+                return sample_components
+
+            append_sample_warning(f"sampleId={current_id}: {field_name} sums to {total:.6f}; renormalizing to 1.0")
+            normalized_values = {index: value / total for (index, value) in provided}
+            return [
+                attrs.evolve(component, **{attribute_name: normalized_values[index]})
+                if index in normalized_values
+                else component
+                for index, component in enumerate(sample_components)
+            ]
 
         def finalize_sample() -> None:
             nonlocal current_id, current_name, components
@@ -309,17 +350,8 @@ class ProjectXlsxParser:
                     if comp.mass_frac is not None and not (0.0 <= comp.mass_frac <= 1.0):
                         problems.append(f"sampleId={current_id}: component {comp.component_id!r} massFrac out of range")
 
-                vfs = [c.vol_frac for c in components if c.vol_frac is not None]
-                if len(vfs) == len(components):
-                    total = sum(vfs)
-                    if abs(total - 1.0) > 1e-3:
-                        problems.append(f"sampleId={current_id}: volFrac sums to {total:.6f}, expected ~1.0")
-
-                mfs = [c.mass_frac for c in components if c.mass_frac is not None]
-                if len(mfs) == len(components):
-                    total = sum(mfs)
-                    if abs(total - 1.0) > 1e-3:
-                        problems.append(f"sampleId={current_id}: massFrac sums to {total:.6f}, expected ~1.0")
+                components = normalize_component_fractions("volFrac", "vol_frac", components)
+                components = normalize_component_fractions("massFrac", "mass_frac", components)
 
                 if all(c.vol_frac is None for c in components) and all(c.mass_frac is None for c in components):
                     problems.append(f"sampleId={current_id}: neither volFrac nor massFrac provided for any component")
