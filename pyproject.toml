@@ -8,15 +8,24 @@ dependencies = [
   "attrs>=23.2.0",
   "pandas>=2.1",
   "openpyxl>=3.1",
+  "pint>=0.25",
 ]
 
 [project.optional-dependencies]
+materials = [
+  "periodictable",
+  "xraydb",
+]
+hdf5 = [
+  "h5py>=3.10",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6.0",
   "mypy>=1.8",
   "types-openpyxl",
   "pandas-stubs",
+  "h5py>=3.10",
 ]
 
 [tool.ruff]
