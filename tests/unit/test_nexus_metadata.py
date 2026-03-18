@@ -230,6 +230,12 @@ def test_nexus_metadata_upserter_writes_compatibility_metadata(tmp_path: Path) -
         assert handle["/entry1/sample/sampleid"][()] == b"10"
         assert handle["/entry1/sample/sampos"][()] == b"Mo B5"
         assert handle["/entry1/sample/composition"][()] == b"H4O2Zr1"
+        assert handle["/entry1/sample/transformations"].attrs["NX_class"] == "NXtransformations"
+        assert handle["/entry1/sample/transformations/sample_x"][()] == pytest.approx(1.2)
+        assert handle["/entry1/sample/transformations/sample_x"].attrs["depends_on"] == "."
+        assert handle["/entry1/sample/transformations/sample_x"].attrs["transformation_type"] == "translation"
+        assert handle["/entry1/sample/transformations/sample_x"].attrs["units"] == "mm"
+        assert handle["/entry1/sample/transformations/sample_x"].attrs["vector"] == pytest.approx([0.0, 0.0, 1.0])
         assert handle["/entry1/sample/matrixfraction"][()] == pytest.approx([0.85])
         assert handle["/entry1/sample/samplethickness"][()] == pytest.approx([0.0001])
         assert handle["/entry1/sample/density"][()] == pytest.approx([1.5482])
@@ -286,6 +292,35 @@ def test_nexus_metadata_upserter_preserves_existing_background_file_paths(tmp_pa
         assert handle["/entry1/processing_required_metadata/background_file"][()] == b"existing_background.nxs"
         assert handle["/entry1/processing_required_metadata/dispersed_background_file"][()] == b"existing_dispersed.nxs"
         assert handle["/entry1/processing_required_metadata/background_identifier"][()] == b"20260301_1"
+
+
+def test_nexus_metadata_upserter_preserves_existing_sample_y_and_sample_z_transformations(tmp_path: Path) -> None:
+    material_entry, xray_entry = _make_entries()
+    file_path = tmp_path / "metadata.nxs"
+
+    with h5py.File(file_path, "w") as handle:
+        transformations = handle.create_group("entry1").create_group("sample").create_group("transformations")
+        transformations.attrs["NX_class"] = "NXtransformations"
+        sample_y = transformations.create_dataset("sample_y", data=2.3)
+        sample_y.attrs["units"] = "mm"
+        sample_y.attrs["vector"] = [1.0, 0.0, 0.0]
+        sample_z = transformations.create_dataset("sample_z", data=4.5)
+        sample_z.attrs["units"] = "mm"
+        sample_z.attrs["vector"] = [0.0, 1.0, 0.0]
+
+    NexusMetadataUpserter().upsert_entry(
+        file_path,
+        material_entry=material_entry,
+        xray_entry=xray_entry,
+    )
+
+    with h5py.File(file_path, "r") as handle:
+        assert handle["/entry1/sample/transformations/sample_x"][()] == pytest.approx(1.2)
+        assert handle["/entry1/sample/transformations/sample_x"].attrs["units"] == "mm"
+        assert handle["/entry1/sample/transformations/sample_y"][()] == pytest.approx(2.3)
+        assert handle["/entry1/sample/transformations/sample_y"].attrs["vector"] == pytest.approx([1.0, 0.0, 0.0])
+        assert handle["/entry1/sample/transformations/sample_z"][()] == pytest.approx(4.5)
+        assert handle["/entry1/sample/transformations/sample_z"].attrs["vector"] == pytest.approx([0.0, 1.0, 0.0])
 
 
 def test_nexus_metadata_upserter_accepts_explicit_xray_properties_for_nonstandard_energy(tmp_path: Path) -> None:

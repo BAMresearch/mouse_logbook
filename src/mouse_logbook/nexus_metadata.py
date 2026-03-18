@@ -42,6 +42,7 @@ class NexusMetadataUpserter:
 
     entry_group_name: str = "entry1"
     preserve_external_file_paths: bool = True
+    sample_x_position_aliases: tuple[str, ...] = ("xsam", "samplex")
 
     def upsert_entry(
         self,
@@ -214,6 +215,7 @@ class NexusMetadataUpserter:
                 "units": "m",
             },
         )
+        self._write_sample_x_transformation(sample_group, material_entry.sample_position)
 
         if "components" in sample_group:
             del sample_group["components"]
@@ -293,6 +295,61 @@ class NexusMetadataUpserter:
                     "energy_kev": float(selected_xray.energy_kev),
                 },
             )
+
+    def _write_sample_x_transformation(self, sample_group: Any, sample_position: dict[str, float] | Any) -> None:
+        sample_x_value = self._extract_sample_x_position(sample_position)
+        if sample_x_value is None:
+            return
+
+        transformations_group = self._ensure_group(
+            sample_group,
+            "transformations",
+            attrs_map={"NX_class": "NXtransformations"},
+        )
+        self._upsert_float_scalar_dataset(
+            transformations_group,
+            "sample_x",
+            float(sample_x_value),
+            attrs_map={
+                "depends_on": ".",
+                "transformation_type": "translation",
+                "units": self._transformation_units(transformations_group),
+                "vector": [0.0, 0.0, 1.0],
+            },
+            preserve_existing_attrs=True,
+        )
+
+    def _extract_sample_x_position(self, sample_position: dict[str, float] | Any) -> float | None:
+        normalized_positions = {
+            self._normalize_position_key(key): float(value)
+            for key, value in dict(sample_position).items()
+        }
+        for alias in self.sample_x_position_aliases:
+            if alias in normalized_positions:
+                return normalized_positions[alias]
+
+            prefix_matches = [
+                value for key, value in normalized_positions.items() if key.startswith(alias)
+            ]
+            if prefix_matches:
+                return prefix_matches[0]
+
+        return None
+
+    def _normalize_position_key(self, key: Any) -> str:
+        return "".join(ch for ch in str(key).strip().lower() if ch.isalnum())
+
+    def _transformation_units(self, transformations_group: Any) -> str:
+        for dataset_name in ("sample_x", "sample_y", "sample_z"):
+            if dataset_name not in transformations_group:
+                continue
+            units = transformations_group[dataset_name].attrs.get("units")
+            if units is None:
+                continue
+            if isinstance(units, bytes):
+                return units.decode("utf-8")
+            return str(units)
+        return "mm"
 
     def _write_experiment_metadata(self, experiment_group: Any, material_entry: MaterialEnrichedLogbookEntry) -> None:
         entry = material_entry.entry
@@ -387,6 +444,30 @@ class NexusMetadataUpserter:
 
     def _write_int_scalar_dataset(self, group: Any, name: str, value: int, attrs_map: dict[str, Any] | None = None) -> None:
         self._replace_dataset(group, name, value=int(value), attrs_map=attrs_map)
+
+    def _upsert_float_scalar_dataset(
+        self,
+        group: Any,
+        name: str,
+        value: float,
+        attrs_map: dict[str, Any] | None = None,
+        *,
+        preserve_existing_attrs: bool = False,
+    ) -> None:
+        preserved_attrs: dict[str, Any] = {}
+        if preserve_existing_attrs and name in group:
+            preserved_attrs = {
+                key: group[name].attrs[key]
+                for key in group[name].attrs
+            }
+
+        self._replace_dataset(group, name, value=float(value))
+
+        dataset = group[name]
+        for key, attr_value in preserved_attrs.items():
+            dataset.attrs[key] = attr_value
+        for key, attr_value in (attrs_map or {}).items():
+            dataset.attrs[key] = attr_value
 
     def _write_float_array_dataset(
         self,
